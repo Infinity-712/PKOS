@@ -1,2 +1,47 @@
-# PKOS
-PKOS开发库
+# Personal Knowledge OS (PKOS) v0.1
+
+PKOS 是一个以 **人类裁决优先** 为核心原则的个人知识系统。
+
+## 核心理念
+
+- 知识以对象管理，而不是散乱文本堆积。
+- 所有对象必须进入状态机并可追溯。
+- LLM 仅作协作者，不拥有最终事实裁决权。
+- 发布内容必须可证伪、可回滚、可审计。
+
+## v0.1 工作流
+
+1. **对象录入（objects）**
+   - 类型：`fact` / `skill` / `claim`
+   - 初始状态通常为 `raw`。
+
+2. **状态迁移（state machine）**
+   - 固定流程：`raw -> parsed -> challenged -> trusted -> deprecated`
+   - 进入 `trusted` 需满足类型最低条件并通过人工裁决。
+
+3. **SRS 复习（review）**
+   - 通过队列生成调度复习。
+   - 复习日志写入 `review/logs/`，并保持 append-only。
+
+4. **博客发布（blog）**
+   - 草稿放在 `blog/drafts/`。
+   - 对外发布到 `blog/published/` 前必须通过门禁：引用对象全部 `trusted`。
+
+## 仓库结构（v0.1）
+
+```text
+raw_vault/{web,pdf,notes_inbox}
+objects/{fact,skill,claim}
+tools/{schema,validators,queue_gen,publish_gate}
+review/logs
+blog/{drafts,published}
+docs
+```
+
+## 关键约束
+
+- 纯文件 Git 工作流（Markdown / YAML / JSON）。
+- 不引入数据库作为权威层。
+- 规则必须可 diff、可回滚。
+
+详细规范见：`AGENTS.md` 与 `docs/PROJECT_PLAN.md`。
