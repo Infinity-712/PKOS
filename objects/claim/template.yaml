@@ -1,0 +1,13 @@
+id: claim.template
+type: claim
+status: raw
+source:
+  - ""
+anchors: []
+created_at: ""
+updated_at: ""
+claim_statement: ""
+assumptions: []
+evidence: []
+counter_arguments: []
+scope: ""

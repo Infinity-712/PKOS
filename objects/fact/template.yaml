@@ -1,0 +1,11 @@
+id: fact.template
+type: fact
+status: raw
+source:
+  - ""
+anchors: []
+created_at: ""
+updated_at: ""
+definition: ""
+counter_examples: []
+verification_sources: []
