@@ -1,0 +1,12 @@
+id: skill.template
+type: skill
+status: raw
+source:
+  - "TODO: add source"
+anchors:
+  - "TODO: add anchor"
+created_at: "1970-01-01T00:00:00Z"
+updated_at: "1970-01-01T00:00:00Z"
+canonical_example: ""
+common_mistakes: []
+practice_log: []

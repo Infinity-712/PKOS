@@ -1,0 +1,12 @@
+id: fact.template
+type: fact
+status: raw
+source:
+  - "TODO: add source"
+anchors:
+  - "TODO: add anchor"
+created_at: "1970-01-01T00:00:00Z"
+updated_at: "1970-01-01T00:00:00Z"
+definition: ""
+counter_examples: []
+verification_sources: []

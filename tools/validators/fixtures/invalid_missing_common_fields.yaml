@@ -1,0 +1,6 @@
+id: fact.invalid.common
+type: fact
+status: raw
+# missing: source, anchors, created_at, updated_at
+definition: "缺少通用字段"
+verification_sources: []

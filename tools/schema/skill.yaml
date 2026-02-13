@@ -1,0 +1,13 @@
+name: skill
+required_fields:
+  - id
+  - type
+  - status
+  - source
+  - anchors
+  - created_at
+  - updated_at
+allowed_type: skill
+trusted_requirements:
+  - practice_log
+  - practice_log_needs_success_and_failure: true

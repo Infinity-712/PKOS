@@ -1,0 +1,15 @@
+name: fact
+required_fields:
+  - id
+  - type
+  - status
+  - source
+  - anchors
+  - created_at
+  - updated_at
+allowed_type: fact
+trusted_requirements:
+  - verification_sources
+  - one_of:
+      - counter_examples
+      - easiest_mistakes

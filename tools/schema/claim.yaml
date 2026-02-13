@@ -1,0 +1,17 @@
+name: claim
+required_fields:
+  - id
+  - type
+  - status
+  - source
+  - anchors
+  - created_at
+  - updated_at
+allowed_type: claim
+trusted_requirements:
+  - counter_arguments
+  - at_least_one_strong_opposition: true
+  - scope
+  - one_of:
+      - invalidation_conditions
+      - failure_conditions
