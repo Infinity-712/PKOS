@@ -35,6 +35,10 @@ def _parse_scalar(text: str) -> Any:
         return True
     if value in {"false", "False"}:
         return False
+    if value == "[]":
+        return []
+    if value == "{}":
+        return {}
     if (value.startswith('"') and value.endswith('"')) or (value.startswith("'") and value.endswith("'")):
         return value[1:-1]
     return value

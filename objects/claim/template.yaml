@@ -12,3 +12,8 @@ assumptions: []
 evidence: []
 counter_arguments: []
 scope: ""
+srs:
+  due_at: "2099-01-01T00:00:00Z"
+  interval_days: 1
+  ease: 2.5
+  last_reviewed_at: ""

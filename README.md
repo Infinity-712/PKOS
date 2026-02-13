@@ -58,4 +58,16 @@ docs
 ```bash
 python -m tools.validators.validate
 python -m tools.pkos validate
+python -m tools.pkos gen-queue
 ```
+
+
+## SRS 队列生成（最小可用）
+
+- 命令：`python -m tools.pkos gen-queue`
+- 输出：
+  - `review/daily_queue.md`（fact + skill）
+  - `review/weekly_queue.md`（claim）
+- 规则：`due_at <= now` 的对象进入队列；排序稳定，避免无意义抖动。
+- 若对象缺少 `srs` 字段，将自动补默认值并写回对象文件（可审计、可回滚）。
+- 生成器不会修改 `review/logs/` 历史日志（append-only 约束）。

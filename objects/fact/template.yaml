@@ -10,3 +10,8 @@ updated_at: "1970-01-01T00:00:00Z"
 definition: ""
 counter_examples: []
 verification_sources: []
+srs:
+  due_at: "2099-01-01T00:00:00Z"
+  interval_days: 1
+  ease: 2.5
+  last_reviewed_at: ""
