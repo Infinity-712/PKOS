@@ -59,6 +59,7 @@ docs
 python -m tools.validators.validate
 python -m tools.pkos validate
 python -m tools.pkos gen-queue
+python -m tools.pkos publish-check
 ```
 
 
@@ -71,3 +72,11 @@ python -m tools.pkos gen-queue
 - 规则：`due_at <= now` 的对象进入队列；排序稳定，避免无意义抖动。
 - 若对象缺少 `srs` 字段，将自动补默认值并写回对象文件（可审计、可回滚）。
 - 生成器不会修改 `review/logs/` 历史日志（append-only 约束）。
+
+
+## Publish Gate（最小可用）
+
+- 命令：`python -m tools.pkos publish-check`
+- 默认检查目录：`blog/drafts`（可用 `--blog-dir` 指向 `blog/published`）
+- 规则与引用约定见：`docs/PUBLISH_RULES.md`
+- 任一引用对象不存在或非 `trusted` 时，命令非零退出并阻断发布。
