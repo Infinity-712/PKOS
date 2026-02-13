@@ -75,6 +75,10 @@ def _collect_items(objects_root: Path, now: datetime) -> tuple[list[QueueItem], 
         obj_type = str(obj.get("type", "")).strip()
         obj_id = str(obj.get("id", path.stem)).strip() or path.stem
 
+        if obj_type not in {"fact", "skill", "claim"}:
+            # creative and unknown types are intentionally excluded from default SRS queues
+            continue
+
         obj, changed = _ensure_srs(path, obj)
         if changed:
             notes.append(f"srs defaulted: {path.as_posix()}")

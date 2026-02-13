@@ -27,7 +27,7 @@
 
 ## 4) 对象类型与 trusted 最低条件（强制）
 
-对象类型固定为：`fact / skill / claim`。
+对象类型固定为：`fact / skill / claim`（可信知识轨道）；另支持 `creative` 作为独立创作轨道。
 
 ### fact
 - 最低条件：
@@ -46,6 +46,10 @@
 
 补充：进入 `trusted` 的最终裁决权属于人类维护者。
 
+### creative（独立轨道）
+- 生命周期建议：`draft / revised / published / archived`
+- 不进入 trusted，不强制证据链，不参与默认 SRS。
+
 ## 5) SRS 与复习日志（强制）
 
 - 复习采用 SRS（间隔重复）调度。
@@ -56,10 +60,12 @@
 
 ## 6) 博客发布门禁（强制）
 
-发布到 `blog/published/` 的内容必须满足：
+发布到 `blog/published/`（Knowledge Blog）的内容必须满足：
 - 引用对象全部处于 `trusted`；
 - 文章应标注假设、失效条件、最后更新日期；
 - 发布前执行门禁校验，失败即阻断发布。
+
+Creative 输出由人类决定是否发布，不强制 trusted 门禁。
 
 ## 7) LLM 允许 / 禁止角色
 

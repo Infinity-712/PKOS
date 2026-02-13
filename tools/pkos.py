@@ -4,6 +4,7 @@ Usage:
   python -m tools.pkos validate [--path objects]
   python -m tools.pkos gen-queue [--objects objects --review review]
   python -m tools.pkos publish-check [--blog-dir blog/drafts --objects-dir objects]
+  python -m tools.pkos gen-digest [--objects-dir objects --output-dir digests --week YYYY-Www]
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from tools.digest.gen_digest import run_gen_digest
 from tools.publish_gate.publish_check import run_publish_check
 from tools.queue_gen.gen_queue import run_gen_queue
 from tools.validators.validate import run_validation
@@ -31,6 +33,11 @@ def main() -> int:
     publish_parser.add_argument("--blog-dir", default="blog/drafts", help="Blog directory to check")
     publish_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
 
+    digest_parser = subparsers.add_parser("gen-digest", help="Generate weekly digest")
+    digest_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
+    digest_parser.add_argument("--output-dir", default="digests", help="Digest output directory")
+    digest_parser.add_argument("--week", default=None, help="ISO week: YYYY-Www")
+
     args = parser.parse_args()
 
     if args.command == "validate":
@@ -41,6 +48,9 @@ def main() -> int:
 
     if args.command == "publish-check":
         return run_publish_check(Path(args.blog_dir), Path(args.objects_dir))
+
+    if args.command == "gen-digest":
+        return run_gen_digest(Path(args.objects_dir), Path(args.output_dir), args.week)
 
     parser.error(f"Unknown command: {args.command}")
     return 2

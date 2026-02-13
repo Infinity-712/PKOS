@@ -17,7 +17,7 @@ class ObjectRecord:
 
 
 def iter_object_files(objects_root: Path):
-    for sub in ("fact", "skill", "claim"):
+    for sub in ("fact", "skill", "claim", "creative"):
         d = objects_root / sub
         if not d.exists():
             continue

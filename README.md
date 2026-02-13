@@ -12,7 +12,7 @@ PKOS 是一个以 **人类裁决优先** 为核心原则的个人知识系统。
 ## v0.1 工作流
 
 1. **对象录入（objects）**
-   - 类型：`fact` / `skill` / `claim`
+   - 类型：`fact` / `skill` / `claim` / `creative`（creative 独立轨道）
    - 初始状态通常为 `raw`。
 
 2. **状态迁移（state machine）**
@@ -31,7 +31,7 @@ PKOS 是一个以 **人类裁决优先** 为核心原则的个人知识系统。
 
 ```text
 raw_vault/{web,pdf,notes_inbox}
-objects/{fact,skill,claim}
+objects/{fact,skill,claim,creative}
 tools/{schema,validators,queue_gen,publish_gate}
 review/logs
 blog/{drafts,published}
@@ -60,6 +60,7 @@ python -m tools.validators.validate
 python -m tools.pkos validate
 python -m tools.pkos gen-queue
 python -m tools.pkos publish-check
+python -m tools.pkos gen-digest --week 2026-W07
 ```
 
 
@@ -80,3 +81,15 @@ python -m tools.pkos publish-check
 - 默认检查目录：`blog/drafts`（可用 `--blog-dir` 指向 `blog/published`）
 - 规则与引用约定见：`docs/PUBLISH_RULES.md`
 - 任一引用对象不存在或非 `trusted` 时，命令非零退出并阻断发布。
+
+
+## Weekly Digest（最小可用）
+
+- 命令：`python -m tools.pkos gen-digest --week YYYY-Www`
+- 输出：`digests/YYYY-Www.md`
+- 定位：派生索引，不是权威事实层；每条含 `references` 回链对象 id。
+
+## Creative 对象（最小可用）
+
+- 对象类型新增 `creative`，独立生命周期：`draft/revised/published/archived`。
+- `creative` 不进入 trusted，不参与默认 SRS 队列。
