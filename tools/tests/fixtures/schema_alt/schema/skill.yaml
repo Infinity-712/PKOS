@@ -1,0 +1,16 @@
+type_value: skill
+required_fields: [id, type, status, source, anchors, created_at, updated_at]
+non_empty_fields: [id, type, status, created_at, updated_at]
+enum_fields:
+  type: [fact, skill, claim]
+  status: [raw, parsed, challenged, trusted, deprecated]
+field_rules:
+  - rule: min_items
+    field: source
+    min: 1
+trusted_rules:
+  - rule: min_items
+    field: practice_log
+    min: 1
+  - rule: contains_success_and_failure
+    field: practice_log

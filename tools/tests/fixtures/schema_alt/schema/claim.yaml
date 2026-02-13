@@ -1,0 +1,20 @@
+type_value: claim
+required_fields: [id, type, status, source, anchors, created_at, updated_at]
+non_empty_fields: [id, type, status, created_at, updated_at]
+enum_fields:
+  type: [fact, skill, claim]
+  status: [raw, parsed, challenged, trusted, deprecated]
+field_rules:
+  - rule: min_items
+    field: source
+    min: 1
+trusted_rules:
+  - rule: min_items
+    field: counter_arguments
+    min: 1
+  - rule: contains_strong_opposition
+    field: counter_arguments
+  - rule: non_empty
+    field: scope
+  - rule: any_non_empty
+    fields: [invalidation_conditions, failure_conditions]
