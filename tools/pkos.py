@@ -5,6 +5,7 @@ Usage:
   python -m tools.pkos gen-queue [--objects objects --review review]
   python -m tools.pkos publish-check [--blog-dir blog/drafts --objects-dir objects]
   python -m tools.pkos gen-digest [--objects-dir objects --output-dir digests --week YYYY-Www]
+  python -m tools.pkos export-site-data [--objects-dir objects --review-dir review --digests-dir digests --blog-dir blog/published --private-out site-private/_pkos --public-out site-public/_pkos]
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from pathlib import Path
 from tools.digest.gen_digest import run_gen_digest
 from tools.publish_gate.publish_check import run_publish_check
 from tools.queue_gen.gen_queue import run_gen_queue
+from tools.site_export.export_site_data import run_export_site_data
 from tools.validators.validate import run_validation
 
 
@@ -38,6 +40,14 @@ def main() -> int:
     digest_parser.add_argument("--output-dir", default="digests", help="Digest output directory")
     digest_parser.add_argument("--week", default=None, help="ISO week: YYYY-Www")
 
+    export_parser = subparsers.add_parser("export-site-data", help="Export static-site data")
+    export_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
+    export_parser.add_argument("--review-dir", default="review", help="Review directory")
+    export_parser.add_argument("--digests-dir", default="digests", help="Digests directory")
+    export_parser.add_argument("--blog-dir", default="blog/published", help="Public blog directory")
+    export_parser.add_argument("--private-out", default="site-private/_pkos", help="Private site data output")
+    export_parser.add_argument("--public-out", default="site-public/_pkos", help="Public site data output")
+
     args = parser.parse_args()
 
     if args.command == "validate":
@@ -51,6 +61,16 @@ def main() -> int:
 
     if args.command == "gen-digest":
         return run_gen_digest(Path(args.objects_dir), Path(args.output_dir), args.week)
+
+    if args.command == "export-site-data":
+        return run_export_site_data(
+            Path(args.objects_dir),
+            Path(args.review_dir),
+            Path(args.digests_dir),
+            Path(args.blog_dir),
+            Path(args.private_out),
+            Path(args.public_out),
+        )
 
     parser.error(f"Unknown command: {args.command}")
     return 2

@@ -1,0 +1,90 @@
+[
+  {
+    "created_at": "2026-02-12T10:00:00Z",
+    "id": "claim.demo.due",
+    "path": "objects/claim/demo_due_claim.yaml",
+    "status": "challenged",
+    "summary": "A demo claim",
+    "tags": [],
+    "title": "Claim demo due",
+    "type": "claim",
+    "updated_at": "2026-02-12T10:00:00Z"
+  },
+  {
+    "created_at": "1970-01-01T00:00:00Z",
+    "id": "claim.template",
+    "path": "objects/claim/template.yaml",
+    "status": "raw",
+    "summary": "",
+    "tags": [],
+    "title": "",
+    "type": "claim",
+    "updated_at": "1970-01-01T00:00:00Z"
+  },
+  {
+    "created_at": "1970-01-01T00:00:00Z",
+    "id": "creative.template",
+    "path": "objects/creative/template.yaml",
+    "status": "draft",
+    "summary": "",
+    "tags": [],
+    "title": "Creative template",
+    "type": "creative",
+    "updated_at": "1970-01-01T00:00:00Z"
+  },
+  {
+    "created_at": "2026-02-12T10:00:00Z",
+    "id": "fact.demo.due",
+    "path": "objects/fact/demo_due_fact.yaml",
+    "status": "parsed",
+    "summary": "A demo fact for queue generation",
+    "tags": [],
+    "title": "Fact demo due",
+    "type": "fact",
+    "updated_at": "2026-02-12T10:00:00Z"
+  },
+  {
+    "created_at": "1970-01-01T00:00:00Z",
+    "id": "fact.template",
+    "path": "objects/fact/template.yaml",
+    "status": "raw",
+    "summary": "",
+    "tags": [],
+    "title": "",
+    "type": "fact",
+    "updated_at": "1970-01-01T00:00:00Z"
+  },
+  {
+    "created_at": "2026-02-13T00:00:00Z",
+    "id": "fact.publish.trusted",
+    "path": "objects/fact/publish_trusted_fact.yaml",
+    "status": "trusted",
+    "summary": "A trusted fact used by publish gate test",
+    "tags": [],
+    "title": "Trusted fact for publish check",
+    "type": "fact",
+    "updated_at": "2026-02-13T00:00:00Z"
+  },
+  {
+    "created_at": "2026-02-12T10:00:00Z",
+    "id": "skill.demo.due",
+    "path": "objects/skill/demo_due_skill.yaml",
+    "status": "parsed",
+    "summary": "",
+    "tags": [],
+    "title": "Skill demo due",
+    "type": "skill",
+    "updated_at": "2026-02-12T10:00:00Z"
+  },
+  {
+    "created_at": "1970-01-01T00:00:00Z",
+    "id": "skill.template",
+    "path": "objects/skill/template.yaml",
+    "status": "raw",
+    "summary": "",
+    "tags": [],
+    "title": "",
+    "type": "skill",
+    "updated_at": "1970-01-01T00:00:00Z"
+  }
+]

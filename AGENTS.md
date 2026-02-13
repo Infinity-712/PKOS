@@ -96,3 +96,18 @@ pkos publish-check
 ```
 
 > v0.1 初期可先以占位脚本返回明确提示；后续逐步替换为真实校验逻辑。
+
+
+## 9) GUI 分站与导出边界（v0.3）
+
+- 分站边界：
+  - `site-public` 仅用于公网部署（Knowledge Blog / 可公开 Creative 输出）
+  - `site-private`（dashboard/objects/queues/digests/chat 等）仅本地预览，不部署公网
+- `pkos export-site-data` 必须只读：不得修改 `objects/`、`review/logs/`、`digests/`、`blog/` 源文件。
+- 严格隐私边界：
+  - public 只导出 `blog_index` 白名单字段
+  - private 才能导出 objects/queues/digests 索引
+- GUI 不可写：
+  - Create 仅生成模板文本（复制/下载）
+  - Review 评分仅生成命令片段/日志片段（复制），不直接写入
+- Creative 输出独立通道：`/creative/` 独立路由 + 独立模板，不与 blog 混用主题。

@@ -1,0 +1,7 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="styles.css"></head><body><header><h1 id="title"></h1></header><main id="app"></main><script src="app.js"></script><script>
+const n=location.pathname.split('/').pop();
+if(n==='index.html'){document.getElementById('title').textContent='PKOS Private Dashboard';pageIndex();}
+if(n==='objects.html'){document.getElementById('title').textContent='Objects';pageObjects();}
+if(n==='review.html'){document.getElementById('title').textContent='Review Queues';pageReview();}
+if(n==='digests.html'){document.getElementById('title').textContent='Digests';pageDigests();}
+</script></body></html>
