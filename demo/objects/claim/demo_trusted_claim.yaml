@@ -1,0 +1,29 @@
+id: claim.demo.preview
+type: claim
+status: trusted
+title: "Demo Trusted Claim"
+summary: "A trusted claim for local dashboard preview"
+source:
+  - "https://example.com/claim"
+anchors:
+  - "sec-3"
+created_at: "2026-02-10T09:00:00Z"
+updated_at: "2026-02-12T11:00:00Z"
+claim_statement: "Method X is useful under constrained data quality"
+assumptions:
+  - "data distribution is stable"
+evidence:
+  - "fact.demo.preview"
+counter_arguments:
+  - "强反对: fails with abrupt domain shift"
+scope: "small to medium datasets"
+invalidation_conditions:
+  - "distribution drift beyond threshold"
+srs:
+  due_at: "2026-02-15T09:00:00Z"
+  interval_days: 7
+  ease: 2.4
+  last_reviewed_at: "2026-02-08T09:00:00Z"
+tags:
+  - preview
+  - claim
