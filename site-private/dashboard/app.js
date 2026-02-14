@@ -2,8 +2,7 @@ const PKOS_DATA_BASE = new URLSearchParams(location.search).get('data') || '../_
 const LANG_KEY = 'pkos-lang';
 const THEME_KEY = 'pkos-theme';
 const RATINGS_KEY = 'pkos-review-ratings';
-const PREVIEW_FIELDS = ['content', 'body', 'text', 'notes', 'definition'];
-const CLAIM_HINT_FIELDS = ['claim_statement', 'assumptions', 'counter_arguments', 'scope', 'invalidation_conditions'];
+const PREVIEW_FIELDS = ['content', 'body', 'text', 'notes', 'definition', 'explanation'];
 
 const DIAG = { base: PKOS_DATA_BASE, resources: [] };
 const STATE = {
@@ -137,6 +136,14 @@ function shell(title){
   <dialog id="previewModal" class="modal"></dialog>`;
 }
 
+function pageEnter(){
+  const app = document.getElementById('app');
+  if(!app || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  app.classList.add('page-enter');
+  requestAnimationFrame(()=>app.classList.add('page-enter-active'));
+  setTimeout(()=>app.classList.remove('page-enter', 'page-enter-active'), 240);
+}
+
 function setHeaderTitle(v){ const el=document.getElementById('title'); if(el) el.textContent=v; document.title=v; }
 
 function diagnosticsPanel(){
@@ -182,6 +189,18 @@ function wireGlobalToggles(){
   if(langBtn){ langBtn.onclick = ()=>{ STATE.lang = STATE.lang === 'zh' ? 'en' : 'zh'; localStorage.setItem(LANG_KEY, STATE.lang); location.reload(); }; }
   const themeBtn = document.getElementById('themeToggle');
   if(themeBtn){ themeBtn.onclick = ()=>{ STATE.theme = STATE.theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = STATE.theme; localStorage.setItem(THEME_KEY, STATE.theme); }; }
+
+  document.querySelectorAll('.top-nav a').forEach(a=>{
+    a.addEventListener('click', (e)=>{
+      if(window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      e.preventDefault();
+      const href = a.getAttribute('href');
+      const app = document.getElementById('app');
+      if(!href || !app){ window.location.href = href; return; }
+      app.classList.add('page-exit');
+      setTimeout(()=>{ window.location.href = href; }, 170);
+    });
+  });
 }
 
 function downloadText(filename, text){ const blob = new Blob([text], {type:'text/plain;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=filename; a.click(); URL.revokeObjectURL(a.href); }
@@ -245,20 +264,56 @@ function parseSimpleYAML(yaml){
   return out;
 }
 
+function toArray(v){
+  if(Array.isArray(v)) return v;
+  if(v === undefined || v === null || v === '') return [];
+  return [v];
+}
+
 function extractPreviewContent(meta, obj = {}){
-  for(const field of PREVIEW_FIELDS){
-    if(obj[field]) return {body:String(obj[field]), fallback:false};
+  const fieldsFound = Object.keys(obj).filter(k=>obj[k] !== '' && obj[k] !== undefined && obj[k] !== null);
+  const type = String(obj.type || meta?.type || '').toLowerCase();
+
+  let mainContent = '';
+  const mainCandidates = [...PREVIEW_FIELDS, 'steps', 'examples'];
+  for(const field of mainCandidates){
+    const value = obj[field];
+    if(Array.isArray(value) && value.length){ mainContent = value.map(x=>`- ${x}`).join('\n'); break; }
+    if(typeof value === 'string' && value.trim()){ mainContent = value.trim(); break; }
   }
-  const claimBlocks = [];
-  for(const f of CLAIM_HINT_FIELDS){
-    if(obj[f]){
-      const value = Array.isArray(obj[f]) ? obj[f].map(x=>`- ${x}`).join('\n') : String(obj[f]);
-      claimBlocks.push(`${f}:\n${value}`);
+
+  if(!mainContent && type === 'claim'){
+    for(const field of ['thesis', 'argument', 'claim_statement']){
+      if(obj[field]){ mainContent = String(obj[field]); break; }
     }
   }
-  if(claimBlocks.length){ return {body:claimBlocks.join('\n\n'), fallback:true}; }
-  if(meta?.summary){ return {body:String(meta.summary), fallback:true}; }
-  return {body:'', fallback:true};
+
+  const sections = [];
+  const pushSection = (key, labelZh, labelEn)=>{
+    const arr = toArray(obj[key]).map(x=>String(x)).filter(Boolean);
+    if(arr.length) sections.push({ key, label: STATE.lang === 'zh' ? labelZh : labelEn, items: arr });
+  };
+
+  pushSection('counter_examples', '常见误解/反例', 'Misconceptions / Counterexamples');
+  pushSection('verification_sources', '验证来源', 'Verification Sources');
+  pushSection('counter_arguments', '反对观点', 'Counter Arguments');
+  pushSection('practice_notes', '实践笔记', 'Practice Notes');
+  pushSection('common_mistakes', '常见错误', 'Common Mistakes');
+  pushSection('steps', '步骤', 'Steps');
+  pushSection('examples', '示例', 'Examples');
+  pushSection('source', '来源', 'Sources');
+  pushSection('anchors', '锚点', 'Anchors');
+
+  const fallback = !mainContent;
+  if(!mainContent && meta?.summary) mainContent = String(meta.summary);
+
+  return {
+    mainContent,
+    fallback,
+    fallbackHint: fallback ? (STATE.lang === 'zh' ? '缺少正文字段，建议补充 definition 或 content。' : 'No body field found. Consider adding definition or content.') : '',
+    sections,
+    fieldsFound,
+  };
 }
 
 async function loadObjectByPath(path){
@@ -278,7 +333,7 @@ async function openPreview(item){
   let parsed = {};
   let fallbackMessage = '';
   try{ parsed = await loadObjectByPath(item.path); }
-  catch{ toast(t('loadObjectFailed'), 'error'); fallbackMessage = t('previewLoadFailed'); }
+  catch{ fallbackMessage = t('previewNoBody'); }
 
   const detail = {
     title: parsed.title || item.title || item.id,
@@ -289,7 +344,14 @@ async function openPreview(item){
     summary: parsed.summary || item.title || '',
   };
   const content = extractPreviewContent(detail, parsed);
-  if(content.fallback && !fallbackMessage) fallbackMessage = t('previewNoBody');
+  if(content.fallback && !fallbackMessage) fallbackMessage = content.fallbackHint || t('previewNoBody');
+
+  console.debug('[pkos-preview]', {
+    object_id: item.id,
+    path: item.path,
+    fields_found: content.fieldsFound,
+    used_main: content.mainContent ? 'yes' : 'no'
+  });
 
   dlg.innerHTML = `<form method="dialog" class="modal-inner">
     <header class="modal-head"><h3>${esc(t('previewModalTitle'))}</h3><button class="ghost">${esc(t('close'))}</button></header>
@@ -302,10 +364,24 @@ async function openPreview(item){
     </div>
     <section class="card soft"><h4>${esc(t('summary'))}</h4><p>${esc(detail.summary || '-')}</p></section>
     <section class="card soft"><h4>${esc(t('content'))}</h4><div id="previewBody" class="preview-body"></div></section>
+    <div id="previewSections"></div>
     ${fallbackMessage?`<p class="small warn">${esc(fallbackMessage)}</p>`:''}
   </form>`;
   const body = dlg.querySelector('#previewBody');
-  body.replaceChildren(simplifyMarkdown(content.body || detail.summary || '-'));
+  body.replaceChildren(simplifyMarkdown(content.mainContent || detail.summary || '-'));
+
+  const sectionsHost = dlg.querySelector('#previewSections');
+  for(const sec of content.sections){
+    const section = document.createElement('section');
+    section.className = 'card soft preview-section';
+    const h4 = document.createElement('h4');
+    h4.textContent = sec.label;
+    section.appendChild(h4);
+    const ul = document.createElement('ul');
+    for(const it of sec.items){ const li = document.createElement('li'); li.textContent = it; ul.appendChild(li); }
+    section.appendChild(ul);
+    sectionsHost.appendChild(section);
+  }
   dlg.showModal();
 }
 
@@ -342,6 +418,7 @@ async function pageIndex(){
   setHeaderTitle(t('indexTitle'));
   document.getElementById('app').innerHTML = shell(t('indexTitle'));
   wireGlobalToggles();
+  pageEnter();
   try{
     const data = await loadJSON('index.json');
     const byType={}, byStatus={};
@@ -357,6 +434,7 @@ async function pageObjects(){
   setHeaderTitle(t('objectsTitle'));
   document.getElementById('app').innerHTML = shell(t('objectsTitle'));
   wireGlobalToggles();
+  pageEnter();
   try{
     const data = await loadJSON('index.json');
     document.getElementById('content').innerHTML = `<section class="card filters">
@@ -404,6 +482,7 @@ async function pageReview(){
   setHeaderTitle(t('reviewTitle'));
   document.getElementById('app').innerHTML = shell(t('reviewTitle'));
   wireGlobalToggles();
+  pageEnter();
   loadRatings();
   try{
     const data = await loadJSON('queues.json');
@@ -450,6 +529,7 @@ async function pageDigests(){
   setHeaderTitle(t('digestsTitle'));
   document.getElementById('app').innerHTML = shell(t('digestsTitle'));
   wireGlobalToggles();
+  pageEnter();
   try{
     const data = await loadJSON('digests.json');
     const rows = [...data].sort((a,b)=>String(b.week).localeCompare(String(a.week)))

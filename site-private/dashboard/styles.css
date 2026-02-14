@@ -177,3 +177,29 @@ th { color: var(--muted); font-weight: 600; }
   .top-nav { gap: 8px; }
   .top-nav a { padding: 6px 10px; }
 }
+
+
+.preview-section ul { margin: .35rem 0 .1rem 1.2rem; }
+
+#app.page-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+#app.page-enter.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+#app.page-exit {
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
