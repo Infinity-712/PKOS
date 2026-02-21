@@ -111,3 +111,11 @@ pkos publish-check
   - Create 仅生成模板文本（复制/下载）
   - Review 评分仅生成命令片段/日志片段（复制），不直接写入
 - Creative 输出独立通道：`/creative/` 独立路由 + 独立模板，不与 blog 混用主题。
+
+## 10) 正文规范（v0.4）
+
+- `content` 是对象的规范化正文（canonical body）。
+- Dashboard 预览与 LLM 上下文优先使用 `content`。
+- `definition / canonical_example / claim_statement` 等字段属于可选附块（blocks），用于类型化补充，不再作为正文主来源。
+- 兼容旧对象：允许缺少 `content`，但新对象与 demo 必须优先填写 `content`。
+

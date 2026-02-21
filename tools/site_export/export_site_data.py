@@ -27,19 +27,40 @@ def _export_private_index(objects_dir: Path) -> tuple[list[dict[str, Any]], dict
     for rec in sorted(idx.values(), key=lambda r: (r.object_type, r.status, r.object_id)):
         d = rec.data
         tags = d.get("tags") if isinstance(d.get("tags"), list) else []
-        items.append(
-            {
-                "id": rec.object_id,
-                "type": rec.object_type,
-                "status": rec.status,
-                "title": str(d.get("title") or ""),
-                "summary": str(d.get("summary") or d.get("definition") or d.get("claim_statement") or ""),
-                "tags": [str(t) for t in tags],
-                "created_at": str(d.get("created_at") or ""),
-                "updated_at": str(d.get("updated_at") or ""),
-                "path": rec.path.as_posix(),
-            }
-        )
+        item = {
+            "id": rec.object_id,
+            "type": rec.object_type,
+            "status": rec.status,
+            "title": str(d.get("title") or ""),
+            "summary": str(d.get("summary") or ""),
+            "content": str(d.get("content") or ""),
+            "tags": [str(t) for t in tags],
+            "created_at": str(d.get("created_at") or ""),
+            "updated_at": str(d.get("updated_at") or ""),
+            "path": rec.path.as_posix(),
+        }
+
+        optional_blocks = [
+            "definition",
+            "canonical_example",
+            "claim_statement",
+            "counter_examples",
+            "verification_sources",
+            "common_mistakes",
+            "practice_log",
+            "assumptions",
+            "evidence",
+            "counter_arguments",
+            "scope",
+            "invalidation_conditions",
+            "source",
+            "anchors",
+        ]
+        for key in optional_blocks:
+            if key in d and d.get(key) not in (None, "", []):
+                item[key] = d.get(key)
+
+        items.append(item)
     return items, {"object_issues": [i.format() for i in issues]}
 
 

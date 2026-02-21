@@ -2,7 +2,7 @@ const PKOS_DATA_BASE = new URLSearchParams(location.search).get('data') || '../_
 const LANG_KEY = 'pkos-lang';
 const THEME_KEY = 'pkos-theme';
 const RATINGS_KEY = 'pkos-review-ratings';
-const PREVIEW_FIELDS = ['content', 'body', 'text', 'notes', 'definition', 'explanation'];
+const PREVIEW_FIELDS = ['content'];
 
 const DIAG = { base: PKOS_DATA_BASE, resources: [] };
 const STATE = {
@@ -40,7 +40,7 @@ const I18N = {
     copied: '已复制到剪贴板', copyFailed: '复制失败，请手动复制',
     cleared: '已清空评分聚合器',
     previewLoadFailed: '预览加载失败：未找到对象正文，已回退摘要。',
-    previewNoBody: '无正文字段，当前展示摘要。建议在对象中补充 content/body/text/notes。',
+    previewNoBody: '该对象未填写 content，当前仅展示摘要。建议补充 content。',
     previewModalTitle: '知识预览', close: '关闭',
     summary: '摘要', content: '正文',
     updatedAt: '更新时间', references: '引用', entries: '条目数',
@@ -75,7 +75,7 @@ const I18N = {
     copied: 'Copied to clipboard', copyFailed: 'Copy failed, please copy manually',
     cleared: 'Rating aggregator cleared',
     previewLoadFailed: 'Preview failed: no body found; fallback summary shown.',
-    previewNoBody: 'No body field found; showing summary fallback. Consider adding content/body/text/notes.',
+    previewNoBody: 'This object has no content yet. Showing summary fallback; consider adding content.',
     previewModalTitle: 'Knowledge Preview', close: 'Close',
     summary: 'Summary', content: 'Content',
     updatedAt: 'Updated at', references: 'References', entries: 'Entries',
@@ -272,37 +272,44 @@ function toArray(v){
 
 function extractPreviewContent(meta, obj = {}){
   const fieldsFound = Object.keys(obj).filter(k=>obj[k] !== '' && obj[k] !== undefined && obj[k] !== null);
-  const type = String(obj.type || meta?.type || '').toLowerCase();
 
   let mainContent = '';
-  const mainCandidates = [...PREVIEW_FIELDS, 'steps', 'examples'];
-  for(const field of mainCandidates){
-    const value = obj[field];
-    if(Array.isArray(value) && value.length){ mainContent = value.map(x=>`- ${x}`).join('\n'); break; }
-    if(typeof value === 'string' && value.trim()){ mainContent = value.trim(); break; }
-  }
-
-  if(!mainContent && type === 'claim'){
-    for(const field of ['thesis', 'argument', 'claim_statement']){
-      if(obj[field]){ mainContent = String(obj[field]); break; }
-    }
-  }
+  const value = obj.content;
+  if(Array.isArray(value) && value.length){ mainContent = value.map(x=>`- ${x}`).join('\n'); }
+  else if(typeof value === 'string' && value.trim()){ mainContent = value.trim(); }
 
   const sections = [];
-  const pushSection = (key, labelZh, labelEn)=>{
-    const arr = toArray(obj[key]).map(x=>String(x)).filter(Boolean);
-    if(arr.length) sections.push({ key, label: STATE.lang === 'zh' ? labelZh : labelEn, items: arr });
+  const labels = {
+    definition: ['定义（附块）', 'Definition (Block)'],
+    canonical_example: ['标准示例', 'Canonical Example'],
+    claim_statement: ['主张陈述', 'Claim Statement'],
+    counter_examples: ['常见误解/反例', 'Misconceptions / Counterexamples'],
+    verification_sources: ['验证来源', 'Verification Sources'],
+    common_mistakes: ['常见错误', 'Common Mistakes'],
+    practice_log: ['练习记录', 'Practice Log'],
+    assumptions: ['前提假设', 'Assumptions'],
+    evidence: ['证据', 'Evidence'],
+    counter_arguments: ['反对观点', 'Counter Arguments'],
+    scope: ['适用范围', 'Scope'],
+    invalidation_conditions: ['失效条件', 'Invalidation Conditions'],
+    source: ['来源', 'Sources'],
+    anchors: ['锚点', 'Anchors'],
   };
 
-  pushSection('counter_examples', '常见误解/反例', 'Misconceptions / Counterexamples');
-  pushSection('verification_sources', '验证来源', 'Verification Sources');
-  pushSection('counter_arguments', '反对观点', 'Counter Arguments');
-  pushSection('practice_notes', '实践笔记', 'Practice Notes');
-  pushSection('common_mistakes', '常见错误', 'Common Mistakes');
-  pushSection('steps', '步骤', 'Steps');
-  pushSection('examples', '示例', 'Examples');
-  pushSection('source', '来源', 'Sources');
-  pushSection('anchors', '锚点', 'Anchors');
+  const ordered = [
+    'definition','canonical_example','claim_statement',
+    'counter_examples','verification_sources','common_mistakes','practice_log',
+    'assumptions','evidence','counter_arguments','scope','invalidation_conditions',
+    'source','anchors'
+  ];
+
+  for(const key of ordered){
+    const raw = obj[key];
+    const arr = toArray(raw).map(x=>String(x)).filter(Boolean);
+    if(!arr.length) continue;
+    const [zh,en] = labels[key] || [key,key];
+    sections.push({ key, label: STATE.lang === 'zh' ? zh : en, items: arr });
+  }
 
   const fallback = !mainContent;
   if(!mainContent && meta?.summary) mainContent = String(meta.summary);
@@ -310,11 +317,12 @@ function extractPreviewContent(meta, obj = {}){
   return {
     mainContent,
     fallback,
-    fallbackHint: fallback ? (STATE.lang === 'zh' ? '缺少正文字段，建议补充 definition 或 content。' : 'No body field found. Consider adding definition or content.') : '',
+    fallbackHint: fallback ? t('previewNoBody') : '',
     sections,
     fieldsFound,
   };
 }
+
 
 async function loadObjectByPath(path){
   if(!path) throw new Error('missing path');
@@ -331,27 +339,28 @@ async function openPreview(item){
   const dlg = document.getElementById('previewModal');
   if(!dlg) return;
   let parsed = {};
-  let fallbackMessage = '';
   try{ parsed = await loadObjectByPath(item.path); }
-  catch{ fallbackMessage = t('previewNoBody'); }
+  catch{ parsed = {}; }
 
+  const merged = { ...parsed, ...item };
   const detail = {
-    title: parsed.title || item.title || item.id,
-    type: parsed.type || item.type || '-',
-    status: parsed.status || '-',
-    tags: Array.isArray(parsed.tags) ? parsed.tags : (item.tags || []),
-    updated_at: parsed.updated_at || '-',
-    summary: parsed.summary || item.title || '',
+    title: merged.title || item.id,
+    type: merged.type || '-',
+    status: merged.status || '-',
+    tags: Array.isArray(merged.tags) ? merged.tags : [],
+    updated_at: merged.updated_at || '-',
+    summary: merged.summary || item.title || '',
   };
-  const content = extractPreviewContent(detail, parsed);
-  if(content.fallback && !fallbackMessage) fallbackMessage = content.fallbackHint || t('previewNoBody');
+  const content = extractPreviewContent(detail, merged);
 
   console.debug('[pkos-preview]', {
     object_id: item.id,
     path: item.path,
     fields_found: content.fieldsFound,
-    used_main: content.mainContent ? 'yes' : 'no'
+    has_content: Boolean(merged.content),
   });
+
+  const fallbackMessage = content.fallback ? content.fallbackHint : '';
 
   dlg.innerHTML = `<form method="dialog" class="modal-inner">
     <header class="modal-head"><h3>${esc(t('previewModalTitle'))}</h3><button class="ghost">${esc(t('close'))}</button></header>
@@ -367,6 +376,7 @@ async function openPreview(item){
     <div id="previewSections"></div>
     ${fallbackMessage?`<p class="small warn">${esc(fallbackMessage)}</p>`:''}
   </form>`;
+
   const body = dlg.querySelector('#previewBody');
   body.replaceChildren(simplifyMarkdown(content.mainContent || detail.summary || '-'));
 
@@ -384,6 +394,7 @@ async function openPreview(item){
   }
   dlg.showModal();
 }
+
 
 function renderBuilder(){
   const ids = Object.keys(STATE.ratings).sort();
@@ -485,8 +496,9 @@ async function pageReview(){
   pageEnter();
   loadRatings();
   try{
-    const data = await loadJSON('queues.json');
-    const items = [...(data.daily||[]), ...(data.weekly||[])];
+    const [data, indexRows] = await Promise.all([loadJSON('queues.json'), loadJSON('index.json')]);
+    const indexById = Object.fromEntries((indexRows||[]).map(i=>[i.id, i]));
+    const items = [...(data.daily||[]), ...(data.weekly||[])].map(i=>({ ...i, ...(indexById[i.id]||{}) }));
     const byId = Object.fromEntries(items.map(i=>[i.id, i]));
     document.getElementById('content').innerHTML = `<div class="card warn">${esc(t('reviewReadonly'))}</div>
     <div class="card"><h3>${esc(t('daily'))}</h3><table><thead><tr><th>${esc(t('id'))}</th><th>${esc(t('title'))}</th><th>${esc(t('dueAt'))}</th><th>${esc(t('path'))}</th><th>${esc(t('score'))}</th><th>${esc(t('actions'))}</th></tr></thead><tbody>${toReviewRows(data.daily||[])}</tbody></table></div>

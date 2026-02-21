@@ -4,5 +4,5 @@ Generated at: 2026-02-13T00:00:00Z
 
 | id | summary | due_at | path |
 |---|---|---|---|
-| `fact.demo.preview` | Demo Trusted Fact | `2026-02-13T08:00:00Z` | [demo/objects/fact/demo_trusted_fact.yaml](demo/objects/fact/demo_trusted_fact.yaml) |
-| `skill.demo.preview` | Demo Trusted Skill | `2026-02-13T09:00:00Z` | [demo/objects/skill/demo_trusted_skill.yaml](demo/objects/skill/demo_trusted_skill.yaml) |
+| `fact.demo.due` | Fact demo due | `2020-01-01T00:00:00Z` | [demo/objects/fact/fact.demo.due.yaml](demo/objects/fact/fact.demo.due.yaml) |
+| `skill.demo.due` | Skill demo due | `2020-01-02T00:00:00Z` | [demo/objects/skill/skill.demo.due.yaml](demo/objects/skill/skill.demo.due.yaml) |

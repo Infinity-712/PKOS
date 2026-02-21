@@ -4,4 +4,4 @@ Generated at: 2026-02-13T00:00:00Z
 
 | id | summary | due_at | path |
 |---|---|---|---|
-| `claim.demo.preview` | Demo Trusted Claim | `2026-02-15T09:00:00Z` | [demo/objects/claim/demo_trusted_claim.yaml](demo/objects/claim/demo_trusted_claim.yaml) |
+| `claim.demo.due` | Claim demo due | `2020-01-03T00:00:00Z` | [demo/objects/claim/claim.demo.due.yaml](demo/objects/claim/claim.demo.due.yaml) |

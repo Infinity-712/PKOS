@@ -31,3 +31,13 @@ python -m tools.pkos publish-check --blog-dir blog/drafts/pass_cases
 ## 只读 GUI 规则
 - Dashboard 只读，Create/Review 仅生成可复制内容。
 - 任何写回操作必须在 VS Code + CLI 中完成。
+
+## 对象录入规范（v0.4）
+- 新建对象推荐最小字段：`title` / `summary` / `content`（demo 现阶段强制）。
+- `content` 为规范化正文，预览全文与 LLM 上下文优先读取该字段。
+- 类型附块推荐：
+  - fact：`counter_examples`、`verification_sources`
+  - skill：`common_mistakes`、`practice_log`
+  - claim：`assumptions`、`evidence`、`counter_arguments`、`scope`、`invalidation_conditions`
+  - creative：`tags`（可选 notes 等补充）
+

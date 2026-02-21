@@ -3,13 +3,13 @@
     {
       "due_at": "2020-01-01T00:00:00Z",
       "id": "fact.demo.due",
-      "path": "objects/fact/demo_due_fact.yaml",
+      "path": "demo/objects/fact/fact.demo.due.yaml",
       "title": "Fact demo due"
     },
     {
       "due_at": "2020-01-02T00:00:00Z",
       "id": "skill.demo.due",
-      "path": "objects/skill/demo_due_skill.yaml",
+      "path": "demo/objects/skill/skill.demo.due.yaml",
       "title": "Skill demo due"
     }
   ],
@@ -18,7 +18,7 @@
     {
       "due_at": "2020-01-03T00:00:00Z",
       "id": "claim.demo.due",
-      "path": "objects/claim/demo_due_claim.yaml",
+      "path": "demo/objects/claim/claim.demo.due.yaml",
       "title": "Claim demo due"
     }
   ]
