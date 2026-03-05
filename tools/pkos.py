@@ -40,6 +40,9 @@ def main() -> int:
     digest_parser.add_argument("--output-dir", default="digests", help="Digest output directory")
     digest_parser.add_argument("--week", default=None, help="ISO week: YYYY-Www")
 
+    serve_parser = subparsers.add_parser("serve", help="Run local backend API")
+    serve_parser.add_argument("--port", type=int, default=8787, help="Server port (localhost only)")
+
     export_parser = subparsers.add_parser("export-site-data", help="Export static-site data")
     export_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
     export_parser.add_argument("--review-dir", default="review", help="Review directory")
@@ -71,6 +74,12 @@ def main() -> int:
             Path(args.private_out),
             Path(args.public_out),
         )
+
+    if args.command == "serve":
+        from tools.server.main import main as run_server_main
+        import sys
+        sys.argv = ["pkos-serve", "--port", str(args.port)]
+        return run_server_main()
 
     parser.error(f"Unknown command: {args.command}")
     return 2

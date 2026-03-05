@@ -119,3 +119,13 @@ pkos publish-check
 - `definition / canonical_example / claim_statement` 等字段属于可选附块（blocks），用于类型化补充，不再作为正文主来源。
 - 兼容旧对象：允许缺少 `content`，但新对象与 demo 必须优先填写 `content`。
 
+## 11) 本地后端边界（v0.4 MVP）
+
+- 本地后端仅允许监听 `127.0.0.1`，禁止绑定 `0.0.0.0`。
+- 当前阶段 LLM 无写权限：`/api/chat` 仅占位，不提供文件写入能力。
+- 写回仅允许通过确定性接口（`ratings:batch`）执行，且必须：
+  - 仅修改白名单目录：`objects/` 与 `review/logs/`
+  - 复习日志 append-only（只追加，不改写历史）
+  - 基于固定 SRS 规则更新（可复现）
+  - 每次批量写回自动 git commit（规范化 commit message）
+

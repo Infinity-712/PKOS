@@ -41,3 +41,44 @@ python -m tools.pkos publish-check --blog-dir blog/drafts/pass_cases
   - claim：`assumptions`、`evidence`、`counter_arguments`、`scope`、`invalidation_conditions`
   - creative：`tags`（可选 notes 等补充）
 
+## 本地后端（v0.4 MVP）
+
+### 启动
+```bash
+python -m tools.pkos serve --port 8787
+# 或
+python -m tools.server.main --port 8787
+```
+
+### 只读 API（示例）
+```bash
+curl http://127.0.0.1:8787/api/health
+curl 'http://127.0.0.1:8787/api/objects?limit=5'
+curl http://127.0.0.1:8787/api/objects/fact.demo.due/rendered
+curl http://127.0.0.1:8787/api/review/queues
+curl http://127.0.0.1:8787/api/digests
+```
+
+### 评分批量写回（append-only + SRS + auto commit）
+请求头：`X-PKOS-Token`（从环境变量 `PKOS_WRITE_TOKEN` 读取）
+```bash
+curl -X POST http://127.0.0.1:8787/api/review/ratings:batch   -H 'Content-Type: application/json'   -H 'X-PKOS-Token: <your-token>'   -d '{"items":[{"id":"fact.demo.due","score":4},{"id":"skill.demo.due","score":3}]}'
+```
+
+写回结果：
+- `review/logs/YYYY-MM-DD.jsonl` 追加日志（append-only）
+- 对应对象 `srs` 字段更新（SM-2 子集）
+- 自动产生一次 git commit：`review: ratings batch (n=<N>)`
+
+### 回滚
+```bash
+git log --oneline -n 5
+git revert <commit_hash>
+```
+
+### 常见错误
+- `401 invalid token`：`X-PKOS-Token` 与 `PKOS_WRITE_TOKEN` 不匹配
+- `403 localhost only`：请求未从本机回环地址进入
+- `404 object not found`：评分对象 id 不存在
+- `type not writable: creative`：creative 不参与默认 SRS 写回
+
