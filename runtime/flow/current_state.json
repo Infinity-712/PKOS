@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-06-28T12:43:20Z",
+  "items": [],
+  "schema_version": "0.5-alpha",
+  "source": "default",
+  "state": {
+    "body": "unknown",
+    "context": "unknown",
+    "energy": "unknown",
+    "mode": "unknown",
+    "mood": "unknown",
+    "risk": {
+      "overload": "unknown",
+      "rumination": "unknown",
+      "short_video": "unknown"
+    }
+  }
+}

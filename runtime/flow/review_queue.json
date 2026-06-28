@@ -1,0 +1,34 @@
+{
+  "generated_at": "2026-06-28T12:43:20Z",
+  "items": [
+    {
+      "due_at": "2020-01-01T00:00:00Z",
+      "object_id": "fact.demo.due",
+      "object_type": "fact",
+      "path": "objects/fact/demo_due_fact.yaml",
+      "queue": "daily",
+      "status": "parsed",
+      "title": "Fact demo due"
+    },
+    {
+      "due_at": "2020-01-02T00:00:00Z",
+      "object_id": "skill.demo.due",
+      "object_type": "skill",
+      "path": "objects/skill/demo_due_skill.yaml",
+      "queue": "daily",
+      "status": "parsed",
+      "title": "Skill demo due"
+    },
+    {
+      "due_at": "2020-01-03T00:00:00Z",
+      "object_id": "claim.demo.due",
+      "object_type": "claim",
+      "path": "objects/claim/demo_due_claim.yaml",
+      "queue": "weekly",
+      "status": "challenged",
+      "title": "Claim demo due"
+    }
+  ],
+  "schema_version": "0.5-alpha",
+  "source": "review_queue_markdown"
+}

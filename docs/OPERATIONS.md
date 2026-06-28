@@ -25,6 +25,16 @@
    ```
    该命令同时写出 `site-private/_pkos/` 与 `runtime/site-private/_pkos/`。
 
+5. 生成 Flow Hub 运行视图：
+   ```bash
+   python -m tools.pkos gen-flow
+   ```
+
+6. 导出月洛洛上下文包：
+   ```bash
+   python -m tools.pkos export-agent-context
+   ```
+
 ## 本地预览
 
 默认预览当前仓库权威数据：

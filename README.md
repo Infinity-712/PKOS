@@ -51,8 +51,12 @@ PKOS 是一个私密个人知识与能动性系统。它把知识对象、复习
 python -m tools.pkos validate
 python -m tools.pkos gen-queue
 python -m tools.pkos gen-digest --week 2026-W07
+python -m tools.pkos gen-flow
+python -m tools.pkos export-agent-context
 python -m tools.pkos export-site-data
 ```
+
+`gen-flow` 会生成 `runtime/flow/*.json`。`export-agent-context` 会生成 `runtime/agent_context.json`，供月洛洛读取。二者都是只读派生命令，不修改 `objects/`、`docs/`、schema 或 trusted 状态。
 
 ## 本地预览
 
@@ -77,6 +81,7 @@ python -m http.server 8000
 - Dashboard 当前仍是只读视图；Review 评分可生成聚合片段，权威写回应通过后端确定性接口。
 - `creative` 保留为内部对象类型，生命周期建议为 `draft / revised / archived`。
 - RAG、前端导出、Agent Context Pack 都是派生缓存，不是权威层。
+- `runtime/flow/` 与 `runtime/agent_context.json` 可删除并重新生成。
 - 后续 Flow Hub / 月洛洛 / RAG Sidecar 需要遵守 `AGENTS.md` 的权限分级。
 
 详细规范见：`AGENTS.md`、`docs/ARCHITECTURE_V0.5.md`、`docs/FLOW_HUB_CONTRACT.md`、`docs/AGENT_AUTHORITY_BOUNDARY.md`、`docs/RAG_SIDECAR_DESIGN.md`、`docs/PROJECT_PLAN.md`、`docs/OPERATIONS.md`。
