@@ -41,8 +41,9 @@ PKOS 是一个私密个人知识与能动性系统。它把知识对象、复习
    - FastAPI 本地后端默认监听 `127.0.0.1`。
    - 写接口必须 token + localhost + 白名单 + auto commit。
 
-7. **future Flow Hub**
+7. **Flow Hub / runtime**
    - 预留 Inbox、Current State、Today Queue、Recovery Queue、Writing Queue、Agent Context Pack 等运行中枢能力。
+   - `runtime/` 保存可删除、可重建的派生上下文与索引缓存。
 
 ## 命令
 
@@ -78,4 +79,4 @@ python -m http.server 8000
 - RAG、前端导出、Agent Context Pack 都是派生缓存，不是权威层。
 - 后续 Flow Hub / 月洛洛 / RAG Sidecar 需要遵守 `AGENTS.md` 的权限分级。
 
-详细规范见：`AGENTS.md`、`docs/PROJECT_PLAN.md`、`docs/OPERATIONS.md`。
+详细规范见：`AGENTS.md`、`docs/ARCHITECTURE_V0.5.md`、`docs/FLOW_HUB_CONTRACT.md`、`docs/AGENT_AUTHORITY_BOUNDARY.md`、`docs/RAG_SIDECAR_DESIGN.md`、`docs/PROJECT_PLAN.md`、`docs/OPERATIONS.md`。

@@ -4,7 +4,7 @@ Usage:
   python -m tools.pkos validate [--path objects]
   python -m tools.pkos gen-queue [--objects objects --review review]
   python -m tools.pkos gen-digest [--objects-dir objects --output-dir digests --week YYYY-Www]
-  python -m tools.pkos export-site-data [--profile current|demo] [--objects-dir objects --review-dir review --digests-dir digests --private-out site-private/_pkos]
+  python -m tools.pkos export-site-data [--profile current|demo] [--objects-dir objects --review-dir review --digests-dir digests --private-out site-private/_pkos --runtime-out runtime/site-private/_pkos]
 """
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ def main() -> int:
     export_parser.add_argument("--review-dir", default="review", help="Review directory")
     export_parser.add_argument("--digests-dir", default="digests", help="Digests directory")
     export_parser.add_argument("--private-out", default="site-private/_pkos", help="Private site data output")
+    export_parser.add_argument("--runtime-out", default="runtime/site-private/_pkos", help="Runtime private site data output")
 
     args = parser.parse_args()
 
@@ -70,6 +71,7 @@ def main() -> int:
             Path(args.review_dir),
             Path(args.digests_dir),
             Path(args.private_out),
+            Path(args.runtime_out),
         )
 
     if args.command == "serve":

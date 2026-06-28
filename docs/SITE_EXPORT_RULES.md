@@ -13,11 +13,13 @@
   ```bash
   python -m tools.pkos export-site-data --profile demo
   ```
-- 导出目录默认为 `site-private/_pkos/`。
+- dashboard 导出目录默认为 `site-private/_pkos/`。
+- v0.5 runtime 镜像目录默认为 `runtime/site-private/_pkos/`。
+- 两个目录都属于派生层，可删除并重新导出。
 
 ## 导出文件
 
-### `site-private/_pkos/index.json`
+### `site-private/_pkos/index.json` and `runtime/site-private/_pkos/index.json`
 
 对象索引字段：
 
@@ -49,7 +51,7 @@
 - `source`
 - `anchors`
 
-### `site-private/_pkos/queues.json`
+### `site-private/_pkos/queues.json` and `runtime/site-private/_pkos/queues.json`
 
 复习队列字段：
 
@@ -57,7 +59,7 @@
 - `weekly[]`
 - 每个 item 包含 `id`、`title`、`due_at`、`path`
 
-### `site-private/_pkos/digests.json`
+### `site-private/_pkos/digests.json` and `runtime/site-private/_pkos/digests.json`
 
 Digest 索引字段：
 

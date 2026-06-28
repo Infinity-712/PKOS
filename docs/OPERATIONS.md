@@ -23,6 +23,7 @@
    ```bash
    python -m tools.pkos export-site-data
    ```
+   该命令同时写出 `site-private/_pkos/` 与 `runtime/site-private/_pkos/`。
 
 ## 本地预览
 

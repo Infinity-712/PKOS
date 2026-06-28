@@ -89,6 +89,18 @@ Flow Hub 作为 PKOS 与月洛洛 / 前端之间的运行中枢，优先支持�
 
 Flow Hub 不替代权威层，不迁移 trusted，不绕过 Git 审计。
 
+v0.5 架构主文档见 `docs/ARCHITECTURE_V0.5.md`。配套契约：
+
+- `docs/FLOW_HUB_CONTRACT.md`
+- `docs/AGENT_AUTHORITY_BOUNDARY.md`
+- `docs/RAG_SIDECAR_DESIGN.md`
+
+目录骨架：
+
+- `inbox/`：低摩擦捕获池；
+- `runtime/`：派生上下文、索引、private site 镜像；
+- `runtime/site-private/_pkos/`：dashboard 导出数据的 v0.5 runtime 镜像。
+
 ### v0.6 RAG Sidecar
 
 RAG Sidecar 是可删除、可重建的派生检索层：

@@ -1,0 +1,25 @@
+{
+  "daily": [
+    {
+      "due_at": "2020-01-01T00:00:00Z",
+      "id": "fact.demo.due",
+      "path": "objects/fact/demo_due_fact.yaml",
+      "title": "Fact demo due"
+    },
+    {
+      "due_at": "2020-01-02T00:00:00Z",
+      "id": "skill.demo.due",
+      "path": "objects/skill/demo_due_skill.yaml",
+      "title": "Skill demo due"
+    }
+  ],
+  "sort_policy": "due_at,id",
+  "weekly": [
+    {
+      "due_at": "2020-01-03T00:00:00Z",
+      "id": "claim.demo.due",
+      "path": "objects/claim/demo_due_claim.yaml",
+      "title": "Claim demo due"
+    }
+  ]
+}

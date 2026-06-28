@@ -127,18 +127,25 @@ def run_export_site_data(
     review_dir: Path,
     digests_dir: Path,
     private_out: Path,
+    runtime_out: Path | None = None,
 ) -> int:
     private_index, meta = _export_private_index(objects_dir)
     private_queues = _export_private_queues(review_dir)
     private_digests = _export_private_digests(digests_dir)
 
-    _write_json(private_out / "index.json", private_index)
-    _write_json(private_out / "queues.json", private_queues)
-    _write_json(private_out / "digests.json", private_digests)
+    outputs = [private_out]
+    if runtime_out and runtime_out != private_out:
+        outputs.append(runtime_out)
 
-    print(f"exported: {(private_out / 'index.json').as_posix()}")
-    print(f"exported: {(private_out / 'queues.json').as_posix()}")
-    print(f"exported: {(private_out / 'digests.json').as_posix()}")
+    for out in outputs:
+        _write_json(out / "index.json", private_index)
+        _write_json(out / "queues.json", private_queues)
+        _write_json(out / "digests.json", private_digests)
+
+    for out in outputs:
+        print(f"exported: {(out / 'index.json').as_posix()}")
+        print(f"exported: {(out / 'queues.json').as_posix()}")
+        print(f"exported: {(out / 'digests.json').as_posix()}")
     if meta["object_issues"]:
         print("warnings:")
         for issue in meta["object_issues"]:
@@ -165,6 +172,7 @@ def main() -> int:
     parser.add_argument("--review-dir", default="review")
     parser.add_argument("--digests-dir", default="digests")
     parser.add_argument("--private-out", default="site-private/_pkos")
+    parser.add_argument("--runtime-out", default="runtime/site-private/_pkos")
     args = parser.parse_args()
     _apply_profile(args)
     return run_export_site_data(
@@ -172,6 +180,7 @@ def main() -> int:
         Path(args.review_dir),
         Path(args.digests_dir),
         Path(args.private_out),
+        Path(args.runtime_out),
     )
 
 
