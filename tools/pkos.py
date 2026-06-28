@@ -3,9 +3,8 @@
 Usage:
   python -m tools.pkos validate [--path objects]
   python -m tools.pkos gen-queue [--objects objects --review review]
-  python -m tools.pkos publish-check [--blog-dir blog/drafts --objects-dir objects]
   python -m tools.pkos gen-digest [--objects-dir objects --output-dir digests --week YYYY-Www]
-  python -m tools.pkos export-site-data [--profile current|demo] [--objects-dir objects --review-dir review --digests-dir digests --blog-dir blog/published --private-out site-private/_pkos --public-out site-public/_pkos]
+  python -m tools.pkos export-site-data [--profile current|demo] [--objects-dir objects --review-dir review --digests-dir digests --private-out site-private/_pkos]
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ import argparse
 from pathlib import Path
 
 from tools.digest.gen_digest import run_gen_digest
-from tools.publish_gate.publish_check import run_publish_check
 from tools.queue_gen.gen_queue import run_gen_queue
 from tools.site_export.export_site_data import run_export_site_data
 from tools.validators.validate import run_validation
@@ -30,10 +28,6 @@ def main() -> int:
     queue_parser = subparsers.add_parser("gen-queue", help="Generate SRS queues")
     queue_parser.add_argument("--objects", default="objects", help="Objects root directory")
     queue_parser.add_argument("--review", default="review", help="Review output directory")
-
-    publish_parser = subparsers.add_parser("publish-check", help="Check publish gate for blog posts")
-    publish_parser.add_argument("--blog-dir", default="blog/drafts", help="Blog directory to check")
-    publish_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
 
     digest_parser = subparsers.add_parser("gen-digest", help="Generate weekly digest")
     digest_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
@@ -53,9 +47,7 @@ def main() -> int:
     export_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
     export_parser.add_argument("--review-dir", default="review", help="Review directory")
     export_parser.add_argument("--digests-dir", default="digests", help="Digests directory")
-    export_parser.add_argument("--blog-dir", default="blog/published", help="Public blog directory")
     export_parser.add_argument("--private-out", default="site-private/_pkos", help="Private site data output")
-    export_parser.add_argument("--public-out", default="site-public/_pkos", help="Public site data output")
 
     args = parser.parse_args()
 
@@ -65,9 +57,6 @@ def main() -> int:
     if args.command == "gen-queue":
         return run_gen_queue(Path(args.objects), Path(args.review))
 
-    if args.command == "publish-check":
-        return run_publish_check(Path(args.blog_dir), Path(args.objects_dir))
-
     if args.command == "gen-digest":
         return run_gen_digest(Path(args.objects_dir), Path(args.output_dir), args.week)
 
@@ -76,14 +65,11 @@ def main() -> int:
             args.objects_dir = "demo/objects"
             args.review_dir = "demo/review"
             args.digests_dir = "demo/digests"
-            args.blog_dir = "demo/blog"
         return run_export_site_data(
             Path(args.objects_dir),
             Path(args.review_dir),
             Path(args.digests_dir),
-            Path(args.blog_dir),
             Path(args.private_out),
-            Path(args.public_out),
         )
 
     if args.command == "serve":

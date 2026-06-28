@@ -7,7 +7,6 @@ import re
 from typing import Any
 
 from tools.common.object_store import build_object_index
-from tools.common.yaml_io import extract_markdown_frontmatter
 
 WEEK_RE = re.compile(r"^(\d{4}-W\d{2})\.md$")
 
@@ -15,10 +14,6 @@ WEEK_RE = re.compile(r"^(\d{4}-W\d{2})\.md$")
 def _write_json(path: Path, data: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-
-def _slug_from_path(path: Path) -> str:
-    return path.stem
 
 
 def _export_private_index(objects_dir: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -127,55 +122,23 @@ def _export_private_digests(digests_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
-def _export_public_blog_index(blog_dir: Path) -> list[dict[str, str]]:
-    posts = sorted(blog_dir.rglob("*.md")) if blog_dir.exists() else []
-    rows: list[dict[str, str]] = []
-    for p in posts:
-        fm, _body, errs = extract_markdown_frontmatter(p)
-        if errs or not isinstance(fm, dict):
-            continue
-        tags = fm.get("tags") if isinstance(fm.get("tags"), list) else []
-        channel = str(fm.get("channel") or "knowledge")
-        rows.append(
-            {
-                "slug": _slug_from_path(p),
-                "title": str(fm.get("title") or p.stem),
-                "summary": str(fm.get("summary") or ""),
-                "date": str(fm.get("last_updated") or fm.get("date") or ""),
-                "status": str(fm.get("status") or ""),
-                "created_at": str(fm.get("created_at") or ""),
-                "updated_at": str(fm.get("updated_at") or fm.get("last_updated") or ""),
-                "tags": [str(t) for t in tags],
-                "channel": channel,
-                "path": p.as_posix(),
-            }
-        )
-    rows.sort(key=lambda r: (r.get("channel", ""), r.get("date", ""), r.get("slug", "")))
-    return rows
-
-
 def run_export_site_data(
     objects_dir: Path,
     review_dir: Path,
     digests_dir: Path,
-    blog_dir: Path,
     private_out: Path,
-    public_out: Path,
 ) -> int:
     private_index, meta = _export_private_index(objects_dir)
     private_queues = _export_private_queues(review_dir)
     private_digests = _export_private_digests(digests_dir)
-    public_blog = _export_public_blog_index(blog_dir)
 
     _write_json(private_out / "index.json", private_index)
     _write_json(private_out / "queues.json", private_queues)
     _write_json(private_out / "digests.json", private_digests)
-    _write_json(public_out / "blog_index.json", public_blog)
 
     print(f"exported: {(private_out / 'index.json').as_posix()}")
     print(f"exported: {(private_out / 'queues.json').as_posix()}")
     print(f"exported: {(private_out / 'digests.json').as_posix()}")
-    print(f"exported: {(public_out / 'blog_index.json').as_posix()}")
     if meta["object_issues"]:
         print("warnings:")
         for issue in meta["object_issues"]:
@@ -188,11 +151,10 @@ def _apply_profile(args: argparse.Namespace) -> None:
         args.objects_dir = "demo/objects"
         args.review_dir = "demo/review"
         args.digests_dir = "demo/digests"
-        args.blog_dir = "demo/blog"
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Export site data for private/public static views")
+    parser = argparse.ArgumentParser(description="Export private site data")
     parser.add_argument(
         "--profile",
         choices=["current", "demo"],
@@ -202,18 +164,14 @@ def main() -> int:
     parser.add_argument("--objects-dir", default="objects")
     parser.add_argument("--review-dir", default="review")
     parser.add_argument("--digests-dir", default="digests")
-    parser.add_argument("--blog-dir", default="blog/published")
     parser.add_argument("--private-out", default="site-private/_pkos")
-    parser.add_argument("--public-out", default="site-public/_pkos")
     args = parser.parse_args()
     _apply_profile(args)
     return run_export_site_data(
         Path(args.objects_dir),
         Path(args.review_dir),
         Path(args.digests_dir),
-        Path(args.blog_dir),
         Path(args.private_out),
-        Path(args.public_out),
     )
 
 

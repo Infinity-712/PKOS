@@ -21,7 +21,6 @@ enum_fields:
   status:
     - draft
     - revised
-    - published
     - archived
 field_rules: []
 trusted_rules: []
