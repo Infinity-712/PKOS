@@ -5,7 +5,7 @@ Usage:
   python -m tools.pkos gen-queue [--objects objects --review review]
   python -m tools.pkos publish-check [--blog-dir blog/drafts --objects-dir objects]
   python -m tools.pkos gen-digest [--objects-dir objects --output-dir digests --week YYYY-Www]
-  python -m tools.pkos export-site-data [--objects-dir objects --review-dir review --digests-dir digests --blog-dir blog/published --private-out site-private/_pkos --public-out site-public/_pkos]
+  python -m tools.pkos export-site-data [--profile current|demo] [--objects-dir objects --review-dir review --digests-dir digests --blog-dir blog/published --private-out site-private/_pkos --public-out site-public/_pkos]
 """
 
 from __future__ import annotations
@@ -44,6 +44,12 @@ def main() -> int:
     serve_parser.add_argument("--port", type=int, default=8787, help="Server port (localhost only)")
 
     export_parser = subparsers.add_parser("export-site-data", help="Export static-site data")
+    export_parser.add_argument(
+        "--profile",
+        choices=["current", "demo"],
+        default="current",
+        help="Export current authority files or the bundled demo dataset",
+    )
     export_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
     export_parser.add_argument("--review-dir", default="review", help="Review directory")
     export_parser.add_argument("--digests-dir", default="digests", help="Digests directory")
@@ -66,6 +72,11 @@ def main() -> int:
         return run_gen_digest(Path(args.objects_dir), Path(args.output_dir), args.week)
 
     if args.command == "export-site-data":
+        if args.profile == "demo":
+            args.objects_dir = "demo/objects"
+            args.review_dir = "demo/review"
+            args.digests_dir = "demo/digests"
+            args.blog_dir = "demo/blog"
         return run_export_site_data(
             Path(args.objects_dir),
             Path(args.review_dir),

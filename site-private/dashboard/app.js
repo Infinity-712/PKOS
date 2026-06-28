@@ -2,7 +2,7 @@ const PKOS_DATA_BASE = new URLSearchParams(location.search).get('data') || '../_
 const LANG_KEY = 'pkos-lang';
 const THEME_KEY = 'pkos-theme';
 const RATINGS_KEY = 'pkos-review-ratings';
-const PREVIEW_FIELDS = ['content'];
+const PREVIEW_FIELDS = ['content', 'definition', 'explanation', 'notes', 'text', 'body', 'summary'];
 
 const DIAG = { base: PKOS_DATA_BASE, resources: [] };
 const STATE = {
@@ -270,13 +270,25 @@ function toArray(v){
   return [v];
 }
 
+function firstTextValue(obj, keys){
+  for(const key of keys){
+    const value = obj?.[key];
+    if(Array.isArray(value) && value.length){
+      const text = value.map(x=>`- ${x}`).join('\n').trim();
+      if(text) return { key, text };
+    }
+    if(typeof value === 'string' && value.trim()){
+      return { key, text: value.trim() };
+    }
+  }
+  return { key: '', text: '' };
+}
+
 function extractPreviewContent(meta, obj = {}){
   const fieldsFound = Object.keys(obj).filter(k=>obj[k] !== '' && obj[k] !== undefined && obj[k] !== null);
 
-  let mainContent = '';
-  const value = obj.content;
-  if(Array.isArray(value) && value.length){ mainContent = value.map(x=>`- ${x}`).join('\n'); }
-  else if(typeof value === 'string' && value.trim()){ mainContent = value.trim(); }
+  const picked = firstTextValue({ ...obj, summary: meta?.summary }, PREVIEW_FIELDS);
+  let mainContent = picked.text;
 
   const sections = [];
   const labels = {
@@ -304,6 +316,7 @@ function extractPreviewContent(meta, obj = {}){
   ];
 
   for(const key of ordered){
+    if(key === picked.key) continue;
     const raw = obj[key];
     const arr = toArray(raw).map(x=>String(x)).filter(Boolean);
     if(!arr.length) continue;
@@ -311,8 +324,7 @@ function extractPreviewContent(meta, obj = {}){
     sections.push({ key, label: STATE.lang === 'zh' ? zh : en, items: arr });
   }
 
-  const fallback = !mainContent;
-  if(!mainContent && meta?.summary) mainContent = String(meta.summary);
+  const fallback = !mainContent || picked.key === 'summary';
 
   return {
     mainContent,
@@ -327,7 +339,9 @@ function extractPreviewContent(meta, obj = {}){
 async function loadObjectByPath(path){
   if(!path) throw new Error('missing path');
   if(STATE.previewCache.has(path)) return STATE.previewCache.get(path);
-  const r = await fetch(`../${path}`.replace(/\/+/g, '/'), {cache:'no-store'});
+  const cleanPath = String(path).replace(/^\/+/, '');
+  const url = new URL(`../../${cleanPath}`, location.href).href;
+  const r = await fetch(url, {cache:'no-store'});
   if(!r.ok) throw new Error(`${r.status}`);
   const text = await r.text();
   const parsed = parseSimpleYAML(text);

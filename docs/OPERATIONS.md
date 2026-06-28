@@ -8,6 +8,16 @@
 5. 站点导出：`python -m tools.pkos export-site-data`
 
 ## 本地预览（推荐）
+默认预览当前仓库权威数据：
+```bash
+python -m tools.pkos export-site-data
+```
+
+如需预览稳定 demo 数据：
+```bash
+python -m tools.pkos export-site-data --profile demo
+```
+
 ### 方式 A：Python http.server
 ```bash
 python -m http.server 8000

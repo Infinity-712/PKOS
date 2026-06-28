@@ -44,6 +44,13 @@ python -m tools.pkos export-site-data
 python -m http.server 8000
 ```
 
+如需查看随仓库提供的稳定 demo 数据：
+
+```bash
+python -m tools.pkos export-site-data --profile demo
+python -m http.server 8000
+```
+
 打开：
 - `http://localhost:8000/site-private/dashboard/index.html`
 - `http://localhost:8000/site-public/creative/index.html`

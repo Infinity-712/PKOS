@@ -1,14 +1,1 @@
-[
-  {
-    "entry_count": 4,
-    "path": "demo/digests/2026-W07.md",
-    "references": [
-      "claim.demo.due",
-      "creative.demo",
-      "fact.demo.due",
-      "skill.demo.due"
-    ],
-    "title": "PKOS Weekly Digest (2026-W07)",
-    "week": "2026-W07"
-  }
-]
+[]

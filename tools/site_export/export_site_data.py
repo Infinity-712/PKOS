@@ -183,8 +183,22 @@ def run_export_site_data(
     return 0
 
 
+def _apply_profile(args: argparse.Namespace) -> None:
+    if args.profile == "demo":
+        args.objects_dir = "demo/objects"
+        args.review_dir = "demo/review"
+        args.digests_dir = "demo/digests"
+        args.blog_dir = "demo/blog"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Export site data for private/public static views")
+    parser.add_argument(
+        "--profile",
+        choices=["current", "demo"],
+        default="current",
+        help="Export current authority files or the bundled demo dataset",
+    )
     parser.add_argument("--objects-dir", default="objects")
     parser.add_argument("--review-dir", default="review")
     parser.add_argument("--digests-dir", default="digests")
@@ -192,6 +206,7 @@ def main() -> int:
     parser.add_argument("--private-out", default="site-private/_pkos")
     parser.add_argument("--public-out", default="site-public/_pkos")
     args = parser.parse_args()
+    _apply_profile(args)
     return run_export_site_data(
         Path(args.objects_dir),
         Path(args.review_dir),
