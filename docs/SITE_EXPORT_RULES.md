@@ -1,41 +1,74 @@
-# Site Export Rules (v0.3)
+# Private Site Export Rules
+
+`pkos export-site-data` 仅导出私密 dashboard 所需的派生 JSON。导出数据不是权威层，可删除、可重建。
 
 ## 核心原则
-- `pkos export-site-data` 仅做只读导出，不得修改 `objects/`、`review/logs/`、`digests/`、`blog/` 源文件。
-- 导出 JSON 为站点渲染索引，不是权威层。
-- 默认导出 `current` profile，即仓库当前权威数据：
+
+- 只读导出，不得修改 `objects/`、`review/logs/`、`digests/` 等权威或日志源文件。
+- 默认导出当前权威数据：
   - `objects/`
   - `review/`
   - `digests/`
-  - `blog/published/`
-- 如需稳定演示数据，显式运行：`python -m tools.pkos export-site-data --profile demo`。
+- 如需稳定演示数据，显式运行：
+  ```bash
+  python -m tools.pkos export-site-data --profile demo
+  ```
+- 导出目录默认为 `site-private/_pkos/`。
 
-## 隐私边界与白名单
+## 导出文件
 
-### Public (`site-public/_pkos/blog_index.json`)
-白名单字段：
-- `slug`
+### `site-private/_pkos/index.json`
+
+对象索引字段：
+
+- `id`
+- `type`
+- `status`
 - `title`
 - `summary`
-- `date`
-- `status`
+- `content`
+- `tags`
 - `created_at`
 - `updated_at`
-- `tags`
-- `channel`
 - `path`
 
-禁止包含：
-- `objects` 索引字段
-- `queues/digests` 私有内容
-- 来源细节与内部证据链字段
+可包含对象预览所需的类型附块，例如：
 
-### Private (`site-private/_pkos/*.json`)
-- `index.json`：`id/type/status/title/summary/content/tags/created_at/updated_at/path`，以及对象预览所需的类型附块（如 `definition`、`counter_examples`、`verification_sources` 等）
-- `queues.json`：`daily[]/weekly[]`（`id/title/due_at/path`）
-- `digests.json`：`week/title/path/entry_count/references`
+- `definition`
+- `canonical_example`
+- `claim_statement`
+- `counter_examples`
+- `verification_sources`
+- `common_mistakes`
+- `practice_log`
+- `assumptions`
+- `evidence`
+- `counter_arguments`
+- `scope`
+- `invalidation_conditions`
+- `source`
+- `anchors`
 
-## 稳定排序（降噪）
+### `site-private/_pkos/queues.json`
+
+复习队列字段：
+
+- `daily[]`
+- `weekly[]`
+- 每个 item 包含 `id`、`title`、`due_at`、`path`
+
+### `site-private/_pkos/digests.json`
+
+Digest 索引字段：
+
+- `week`
+- `title`
+- `path`
+- `entry_count`
+- `references`
+
+## 稳定排序
+
 - `index.json`：按 `(type, status, id)`
 - `queues.json`：按 `(due_at, id)`
-- `digests.json`：按 `week asc`（前端可倒序显示）
+- `digests.json`：按 `week asc`
