@@ -143,6 +143,20 @@ python -m tools.pkos --data-root /home/infinity/data/pkos-vault paths --json
 
 See `docs/MOONLOLO_INTEGRATION_PLAN.md` and `docs/DATA_ROOT_AND_VAULT.md`.
 
+Server deployment helpers:
+
+```bash
+bash scripts/server_smoke_test.sh
+```
+
+Moonlolo adapter template:
+
+```text
+integrations/moonlolo/pkos_client.mjs
+```
+
+See `docs/SERVER_DEPLOYMENT.md` for Ubuntu 22.04 deployment notes.
+
 ## 注意事项
 
 - Dashboard 当前仍是只读视图；Review 评分可生成聚合片段，权威写回应通过后端确定性接口。

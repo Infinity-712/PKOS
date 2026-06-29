@@ -57,6 +57,18 @@ PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos state-append 
 
 Do not concatenate untrusted user input into a shell command. Pass arguments as an array.
 
+The reviewed adapter template lives at:
+
+```text
+integrations/moonlolo/pkos_client.mjs
+```
+
+It can later be copied manually into:
+
+```text
+/home/infinity/apps/moonlolo-reminder/pkos_client.mjs
+```
+
 ```js
 import { spawnSync } from "node:child_process";
 
@@ -128,3 +140,19 @@ CLI Adapter
 ```
 
 The later API should preserve the same boundary: bounded read context plus deterministic, allowlisted writeback only.
+
+## Server Smoke Test
+
+Before wiring Moonlolo to the adapter, run the PKOS deployment smoke test from the core repository:
+
+```bash
+bash scripts/server_smoke_test.sh
+```
+
+Or with explicit server paths:
+
+```bash
+PKOS_CORE_ROOT=/home/infinity/apps/pkos-core PKOS_DATA_ROOT=/home/infinity/data/pkos-vault bash scripts/server_smoke_test.sh
+```
+
+This verifies `paths`, `doctor`, Inbox append, State append, Flow Hub runtime generation, Agent Context export, and object validation without opening ports or touching the Moonlolo repository.

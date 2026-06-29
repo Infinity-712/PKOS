@@ -182,6 +182,26 @@ PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos state-append 
 
 Moonlolo 当前只允许读取 bounded Agent Context Pack、追加 Inbox、追加 Current State，不允许直接改 `objects/`、`docs/`、schema、`AGENTS.md` 或执行 trusted 迁移。
 
+服务器 smoke test：
+
+```bash
+bash scripts/server_smoke_test.sh
+```
+
+显式指定路径：
+
+```bash
+PKOS_CORE_ROOT=/home/infinity/apps/pkos-core PKOS_DATA_ROOT=/home/infinity/data/pkos-vault bash scripts/server_smoke_test.sh
+```
+
+Moonlolo Node adapter 示例位于：
+
+```text
+integrations/moonlolo/pkos_client.mjs
+```
+
+该示例只使用 Node `spawnSync` 参数数组调用白名单 PKOS 命令，不直接读写 PKOS 文件。
+
 ## 常见错误
 
 - `401 invalid token`：`X-PKOS-Token` 与 `PKOS_WRITE_TOKEN` 不匹配。

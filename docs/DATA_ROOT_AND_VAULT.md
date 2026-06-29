@@ -51,6 +51,18 @@ PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos gen-flow
 PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context --print
 ```
 
+Deployment smoke test:
+
+```bash
+PKOS_CORE_ROOT=/home/infinity/apps/pkos-core PKOS_DATA_ROOT=/home/infinity/data/pkos-vault bash scripts/server_smoke_test.sh
+```
+
+Moonlolo adapter template:
+
+```text
+integrations/moonlolo/pkos_client.mjs
+```
+
 ## Local Development
 
 Using the core repo as data root is allowed for local development:
