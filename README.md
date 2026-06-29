@@ -120,6 +120,29 @@ python -m tools.pkos export-site-data --profile demo
 python -m http.server 8000
 ```
 
+## Moonlolo Bridge CLI
+
+Moonlolo and other local adapters should call PKOS through bounded CLI commands instead of reading or writing authority files directly.
+
+```bash
+python -m tools.pkos paths
+python -m tools.pkos paths --json
+python -m tools.pkos doctor
+python -m tools.pkos doctor --json
+python -m tools.pkos inbox-append --capture-type note --content "..." --json
+python -m tools.pkos state-append --energy low --mood anxious --body chest_tight --json
+python -m tools.pkos export-agent-context --print
+```
+
+Use `PKOS_DATA_ROOT` or global `--data-root` to point these commands at a private vault:
+
+```bash
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context --print
+python -m tools.pkos --data-root /home/infinity/data/pkos-vault paths --json
+```
+
+See `docs/MOONLOLO_INTEGRATION_PLAN.md` and `docs/DATA_ROOT_AND_VAULT.md`.
+
 ## 注意事项
 
 - Dashboard 当前仍是只读视图；Review 评分可生成聚合片段，权威写回应通过后端确定性接口。

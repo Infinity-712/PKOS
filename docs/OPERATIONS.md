@@ -157,6 +157,31 @@ git log --oneline -n 5
 git revert <commit_hash>
 ```
 
+## Moonlolo Bridge 检查与调用
+
+这些命令用于本地适配层或 Moonlolo 通过 subprocess 调用 PKOS。`--json` 与 `--print` 模式的 stdout 是纯 JSON，适合 Node `JSON.parse`。
+
+```bash
+python -m tools.pkos paths
+python -m tools.pkos paths --json
+python -m tools.pkos doctor
+python -m tools.pkos doctor --json
+python -m tools.pkos inbox-append --capture-type note --content "..." --json
+python -m tools.pkos state-append --energy low --mood anxious --body chest_tight --json
+python -m tools.pkos export-agent-context --print
+```
+
+外部 vault 模式示例：
+
+```bash
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos doctor --json
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context --print
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos inbox-append --capture-type note --content "moonlolo note" --source moonlolo --json
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos state-append --energy low --mood calm --body tired --source moonlolo --json
+```
+
+Moonlolo 当前只允许读取 bounded Agent Context Pack、追加 Inbox、追加 Current State，不允许直接改 `objects/`、`docs/`、schema、`AGENTS.md` 或执行 trusted 迁移。
+
 ## 常见错误
 
 - `401 invalid token`：`X-PKOS-Token` 与 `PKOS_WRITE_TOKEN` 不匹配。

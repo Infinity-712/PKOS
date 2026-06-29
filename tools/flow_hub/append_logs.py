@@ -148,9 +148,14 @@ def run_inbox_append(
     metadata: dict[str, Any] | None = None,
 ) -> int:
     item = build_inbox_item(capture_type, content, source, status, tags, metadata)
-    _append_jsonl(inbox_path, item)
+    append_inbox_item(inbox_path, item)
     print(f"appended: {item['id']} -> {inbox_path.as_posix()}")
     return 0
+
+
+def append_inbox_item(inbox_path: Path, item: dict[str, Any]) -> dict[str, Any]:
+    _append_jsonl(inbox_path, item)
+    return item
 
 
 def run_state_append(
@@ -178,9 +183,14 @@ def run_state_append(
         source,
         note,
     )
-    _append_jsonl(state_path, item)
+    append_state_snapshot(state_path, item)
     print(f"appended: {item['id']} -> {state_path.as_posix()}")
     return 0
+
+
+def append_state_snapshot(state_path: Path, item: dict[str, Any]) -> dict[str, Any]:
+    _append_jsonl(state_path, item)
+    return item
 
 
 def main_inbox_append() -> int:
