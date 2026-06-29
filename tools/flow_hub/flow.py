@@ -35,7 +35,56 @@ def read_json(path: Path) -> Any | None:
         return None
 
 
-def current_state(generated_at: str) -> dict[str, Any]:
+def _latest_state_snapshot(state_path: Path, warn: bool = False) -> dict[str, Any] | None:
+    if not state_path.exists():
+        return None
+
+    latest: dict[str, Any] | None = None
+    for line_no, line in enumerate(state_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            if warn:
+                print(f"warning: skip invalid state snapshot JSON at {state_path.as_posix()}:{line_no}")
+            continue
+        if not isinstance(item, dict):
+            if warn:
+                print(f"warning: skip non-object state snapshot at {state_path.as_posix()}:{line_no}")
+            continue
+        if item.get("type") != "state_snapshot":
+            if warn:
+                print(f"warning: skip non-state snapshot at {state_path.as_posix()}:{line_no}")
+            continue
+        latest = item
+    return latest
+
+
+def current_state(generated_at: str, state_path: Path | None = None, warn: bool = False) -> dict[str, Any]:
+    latest = _latest_state_snapshot(state_path, warn) if state_path else None
+    if latest:
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "generated_at": generated_at,
+            "source": state_path.as_posix() if state_path else "state/snapshots.jsonl",
+            "items": [],
+            "state": {
+                "energy": str(latest.get("energy") or "unknown"),
+                "mood": str(latest.get("mood") or "unknown"),
+                "body": str(latest.get("body") or "unknown"),
+                "context": str(latest.get("context") or "unknown"),
+                "mode": str(latest.get("mode") or "unknown"),
+                "risk": latest.get("risk") if isinstance(latest.get("risk"), dict) else {
+                    "short_video": "unknown",
+                    "rumination": "unknown",
+                    "overload": "unknown",
+                },
+                "note": latest.get("note"),
+                "updated_at": str(latest.get("created_at") or ""),
+            },
+        }
+
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at,
@@ -152,10 +201,17 @@ def flow_budget(generated_at: str) -> dict[str, Any]:
     }
 
 
-def build_flow_models(objects_dir: Path, review_dir: Path, generated_at: str | None = None) -> dict[str, dict[str, Any]]:
+def build_flow_models(
+    objects_dir: Path,
+    review_dir: Path,
+    state_dir: Path | None = None,
+    generated_at: str | None = None,
+    warn: bool = False,
+) -> dict[str, dict[str, Any]]:
     ts = generated_at or utc_now()
+    state_path = (state_dir or Path("state")) / "snapshots.jsonl"
     return {
-        "current_state": current_state(ts),
+        "current_state": current_state(ts, state_path, warn),
         "today_queue": empty_queue(ts, "none"),
         "review_queue": review_queue(objects_dir, review_dir, ts),
         "recovery_queue": empty_queue(ts, "not_implemented"),
@@ -164,9 +220,9 @@ def build_flow_models(objects_dir: Path, review_dir: Path, generated_at: str | N
     }
 
 
-def run_gen_flow(objects_dir: Path, review_dir: Path, runtime_flow_dir: Path) -> int:
+def run_gen_flow(objects_dir: Path, review_dir: Path, state_dir: Path, runtime_flow_dir: Path) -> int:
     runtime_flow_dir.mkdir(parents=True, exist_ok=True)
-    models = build_flow_models(objects_dir, review_dir)
+    models = build_flow_models(objects_dir, review_dir, state_dir, warn=True)
     for name, model in models.items():
         write_json(runtime_flow_dir / f"{name}.json", model)
         print(f"generated: {(runtime_flow_dir / f'{name}.json').as_posix()}")
@@ -205,6 +261,7 @@ def build_agent_context(
     objects_dir: Path,
     review_dir: Path,
     digests_dir: Path,
+    state_dir: Path,
     runtime_flow_dir: Path,
     generated_at: str | None = None,
     budget: dict[str, int] | None = None,
@@ -214,7 +271,7 @@ def build_agent_context(
     if budget:
         context_budget.update(budget)
 
-    fallback = build_flow_models(objects_dir, review_dir, ts)
+    fallback = build_flow_models(objects_dir, review_dir, state_dir, ts)
     current_state_model = _flow_model_from_file_or_build("current_state", runtime_flow_dir, fallback)
     today_queue_model = _flow_model_from_file_or_build("today_queue", runtime_flow_dir, fallback)
     review_queue_model = _flow_model_from_file_or_build("review_queue", runtime_flow_dir, fallback)
@@ -253,10 +310,11 @@ def run_export_agent_context(
     objects_dir: Path,
     review_dir: Path,
     digests_dir: Path,
+    state_dir: Path,
     runtime_flow_dir: Path,
     output_path: Path,
 ) -> int:
-    context = build_agent_context(objects_dir, review_dir, digests_dir, runtime_flow_dir)
+    context = build_agent_context(objects_dir, review_dir, digests_dir, state_dir, runtime_flow_dir)
     write_json(output_path, context)
     print(f"generated: {output_path.as_posix()}")
     return 0
@@ -266,9 +324,10 @@ def main_gen_flow() -> int:
     parser = argparse.ArgumentParser(description="Generate Flow Hub runtime JSON")
     parser.add_argument("--objects-dir", default="objects")
     parser.add_argument("--review-dir", default="review")
+    parser.add_argument("--state-dir", default="state")
     parser.add_argument("--runtime-flow-dir", default="runtime/flow")
     args = parser.parse_args()
-    return run_gen_flow(Path(args.objects_dir), Path(args.review_dir), Path(args.runtime_flow_dir))
+    return run_gen_flow(Path(args.objects_dir), Path(args.review_dir), Path(args.state_dir), Path(args.runtime_flow_dir))
 
 
 def main_export_agent_context() -> int:
@@ -276,6 +335,7 @@ def main_export_agent_context() -> int:
     parser.add_argument("--objects-dir", default="objects")
     parser.add_argument("--review-dir", default="review")
     parser.add_argument("--digests-dir", default="digests")
+    parser.add_argument("--state-dir", default="state")
     parser.add_argument("--runtime-flow-dir", default="runtime/flow")
     parser.add_argument("--output", default="runtime/agent_context.json")
     args = parser.parse_args()
@@ -283,6 +343,7 @@ def main_export_agent_context() -> int:
         Path(args.objects_dir),
         Path(args.review_dir),
         Path(args.digests_dir),
+        Path(args.state_dir),
         Path(args.runtime_flow_dir),
         Path(args.output),
     )

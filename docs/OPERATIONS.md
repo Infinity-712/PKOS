@@ -35,6 +35,18 @@
    python -m tools.pkos export-agent-context
    ```
 
+7. 追加 Inbox 捕获：
+   ```bash
+   python -m tools.pkos inbox-append --capture-type note --content "..."
+   ```
+
+8. 追加当前状态快照：
+   ```bash
+   python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
+   ```
+
+`inbox/items.jsonl` 与 `state/snapshots.jsonl` 是 local operational logs，当前默认被 Git 忽略。`runtime/` 仍是 derived cache，可删除并重新生成。
+
 ## 本地预览
 
 默认预览当前仓库权威数据：

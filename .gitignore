@@ -3,3 +3,9 @@
 /runtime/flow/*.json
 !/runtime/.gitkeep
 !/runtime/flow/.gitkeep
+
+# PKOS local operational logs
+/inbox/*.jsonl
+/state/*.jsonl
+!/inbox/.gitkeep
+!/state/.gitkeep

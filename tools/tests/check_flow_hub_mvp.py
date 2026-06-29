@@ -32,7 +32,7 @@ def main() -> int:
     runtime_flow = work / "runtime" / "flow"
     context_path = work / "runtime" / "agent_context.json"
 
-    rc = run_gen_flow(Path("objects"), Path("review"), runtime_flow)
+    rc = run_gen_flow(Path("objects"), Path("review"), Path("state"), runtime_flow)
     if rc != 0:
         print("FAIL: gen-flow returned non-zero")
         return 1
@@ -48,7 +48,7 @@ def main() -> int:
                 print(f"FAIL: {name} missing key: {key}")
                 return 1
 
-    rc = run_export_agent_context(Path("objects"), Path("review"), Path("digests"), runtime_flow, context_path)
+    rc = run_export_agent_context(Path("objects"), Path("review"), Path("digests"), Path("state"), runtime_flow, context_path)
     if rc != 0 or not context_path.exists():
         print("FAIL: export-agent-context did not generate context")
         return 1

@@ -51,12 +51,21 @@ PKOS 是一个私密个人知识与能动性系统。它把知识对象、复习
 python -m tools.pkos validate
 python -m tools.pkos gen-queue
 python -m tools.pkos gen-digest --week 2026-W07
+python -m tools.pkos inbox-append --capture-type note --content "..."
+python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
 python -m tools.pkos gen-flow
 python -m tools.pkos export-agent-context
 python -m tools.pkos export-site-data
 ```
 
 `gen-flow` 会生成 `runtime/flow/*.json`。`export-agent-context` 会生成 `runtime/agent_context.json`，供月洛洛读取。二者都是只读派生命令，不修改 `objects/`、`docs/`、schema 或 trusted 状态。
+
+`inbox-append` 与 `state-append` 是低风险 append-only 入口，只写入本地运行日志：
+
+- `inbox/items.jsonl`
+- `state/snapshots.jsonl`
+
+当前 public-core 方向下，真实 `.jsonl` 默认被 Git 忽略。未来 private vault 可以选择追踪这些本地日志。
 
 ## 本地预览
 
@@ -82,6 +91,7 @@ python -m http.server 8000
 - `creative` 保留为内部对象类型，生命周期建议为 `draft / revised / archived`。
 - RAG、前端导出、Agent Context Pack 都是派生缓存，不是权威层。
 - `runtime/flow/` 与 `runtime/agent_context.json` 可删除并重新生成。
+- `inbox/items.jsonl` 与 `state/snapshots.jsonl` 是 local operational logs，不是公开核心数据。
 - 后续 Flow Hub / 月洛洛 / RAG Sidecar 需要遵守 `AGENTS.md` 的权限分级。
 
 详细规范见：`AGENTS.md`、`docs/ARCHITECTURE_V0.5.md`、`docs/FLOW_HUB_CONTRACT.md`、`docs/AGENT_AUTHORITY_BOUNDARY.md`、`docs/RAG_SIDECAR_DESIGN.md`、`docs/PROJECT_PLAN.md`、`docs/OPERATIONS.md`。

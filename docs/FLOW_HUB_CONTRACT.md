@@ -107,6 +107,7 @@ Flow Hub must never directly edit AGENTS.md, docs governance files, schema files
 Flow Hub MVP requires these directories:
 
 - `inbox/`
+- `state/`
 - `runtime/`
 - `runtime/flow/`
 
@@ -114,6 +115,8 @@ Flow Hub MVP requires these directories:
 
 Flow Hub MVP requires:
 
+- `python -m tools.pkos inbox-append`
+- `python -m tools.pkos state-append`
 - `python -m tools.pkos gen-flow`
 - `python -m tools.pkos export-agent-context`
 
@@ -141,9 +144,10 @@ All files under `runtime/` are derived caches. They may be deleted and regenerat
 Future append-only files include:
 
 - `inbox/items.jsonl`
+- `state/snapshots.jsonl`
 - `review/logs/*`
 
-This MVP may create `inbox/`, but does not need to implement append APIs yet.
+This MVP implements append-only writes for `inbox/items.jsonl` and `state/snapshots.jsonl`. Both are local operational logs and are ignored by Git by default.
 
 ### Write Boundary
 
@@ -154,7 +158,15 @@ They may write only:
 - `runtime/flow/*.json`
 - `runtime/agent_context.json`
 
-They must not write:
+`inbox-append` may write only:
+
+- `inbox/items.jsonl`
+
+`state-append` may write only:
+
+- `state/snapshots.jsonl`
+
+These commands must not write:
 
 - `objects/`
 - `docs/`
@@ -193,3 +205,5 @@ Flow Hub MVP is valid when:
 7. No command can migrate objects to `trusted`.
 8. No command writes AGENTS.md, docs governance files, schema files, or trusted status.
 9. No public publishing / blog related command or route is restored.
+10. `inbox-append` appends valid JSONL without overwriting old lines.
+11. `state-append` appends valid JSONL, and `gen-flow` reads the latest valid state snapshot.
