@@ -15,6 +15,7 @@
 * 禁止引入数据库作为权威事实层。
 * RAG、搜索索引、前端导出数据、Agent 上下文包均为派生缓存，不是权威层。
 * 所有关键规则、对象状态、复习日志、运行日志、Digest 与 Agent 边界必须能在 Git 中 diff 与回滚。
+* `PKOS_DATA_ROOT` 可将真实数据根目录与代码仓库分离；它只影响 `objects/`、`review/`、`digests/`、`raw_vault/`、`inbox/`、`state/`、`runtime/` 等数据目录，不得改变 tools/docs/schema/AGENTS.md 的读取来源。
 
 ## 3) 知识对象状态机（强制）
 

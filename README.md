@@ -4,6 +4,28 @@ PKOS 是一个私密个人知识与能动性系统。它把知识对象、复习
 
 当前主线不建设公开内容链路；所有站点导出都服务于本地私密操作台。
 
+## Core Root / Data Root
+
+默认情况下，PKOS 会把当前仓库根目录同时作为 code root 与 data root。设置 `PKOS_DATA_ROOT` 后，工具代码仍从当前仓库读取，但真实数据会从指定 data root 读取和写入。
+
+```bash
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos gen-flow
+```
+
+PowerShell：
+
+```powershell
+$env:PKOS_DATA_ROOT="E:\Creation\PKOS-Vault"
+python -m tools.pkos export-agent-context
+```
+
+长期推荐结构：
+
+```text
+pkos-core   # public-safe: tools, docs, schema, demo
+pkos-vault  # private: objects, inbox, state, review logs, digests, runtime
+```
+
 ## 核心理念
 
 - **人类裁决优先**：LLM / Agent 是协作者，不是事实或人生决策的最终裁决者。
@@ -66,6 +88,19 @@ python -m tools.pkos export-site-data
 - `state/snapshots.jsonl`
 
 当前 public-core 方向下，真实 `.jsonl` 默认被 Git 忽略。未来 private vault 可以选择追踪这些本地日志。
+
+服务器部署示例：
+
+```bash
+mkdir -p /home/infinity/apps/pkos-core
+mkdir -p /home/infinity/data/pkos-vault
+
+cd /home/infinity/apps/pkos-core
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos inbox-append --capture-type note --content "server test"
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos state-append --energy low --mood calm --body normal
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos gen-flow
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context
+```
 
 ## 本地预览
 

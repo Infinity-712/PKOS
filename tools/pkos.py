@@ -34,6 +34,7 @@ from tools.flow_hub.append_logs import (
     run_state_append,
 )
 from tools.flow_hub.flow import run_export_agent_context, run_gen_flow
+from tools.pkos_paths import resolve_core_path, resolve_data_path
 from tools.queue_gen.gen_queue import run_gen_queue
 from tools.site_export.export_site_data import run_export_site_data
 from tools.validators.validate import run_validation
@@ -41,10 +42,12 @@ from tools.validators.validate import run_validation
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="pkos", description="PKOS utility commands")
+    parser.add_argument("--data-root", default=None, help="Override PKOS_DATA_ROOT for this command")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     validate_parser = subparsers.add_parser("validate", help="Validate PKOS objects")
     validate_parser.add_argument("--path", default="objects", help="Path to validate")
+    validate_parser.add_argument("--schema-dir", default="tools/schema", help="Schema directory")
 
     queue_parser = subparsers.add_parser("gen-queue", help="Generate SRS queues")
     queue_parser.add_argument("--objects", default="objects", help="Objects root directory")
@@ -109,26 +112,35 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    if args.data_root:
+        import os
+        os.environ["PKOS_DATA_ROOT"] = str(Path(args.data_root))
+
     if args.command == "validate":
-        return run_validation(Path(args.path))
+        return run_validation(resolve_data_path(args.path), resolve_core_path(args.schema_dir))
 
     if args.command == "gen-queue":
-        return run_gen_queue(Path(args.objects), Path(args.review))
+        return run_gen_queue(resolve_data_path(args.objects), resolve_data_path(args.review))
 
     if args.command == "gen-digest":
-        return run_gen_digest(Path(args.objects_dir), Path(args.output_dir), args.week)
+        return run_gen_digest(resolve_data_path(args.objects_dir), resolve_data_path(args.output_dir), args.week)
 
     if args.command == "gen-flow":
-        return run_gen_flow(Path(args.objects_dir), Path(args.review_dir), Path(args.state_dir), Path(args.runtime_flow_dir))
+        return run_gen_flow(
+            resolve_data_path(args.objects_dir),
+            resolve_data_path(args.review_dir),
+            resolve_data_path(args.state_dir),
+            resolve_data_path(args.runtime_flow_dir),
+        )
 
     if args.command == "export-agent-context":
         return run_export_agent_context(
-            Path(args.objects_dir),
-            Path(args.review_dir),
-            Path(args.digests_dir),
-            Path(args.state_dir),
-            Path(args.runtime_flow_dir),
-            Path(args.output),
+            resolve_data_path(args.objects_dir),
+            resolve_data_path(args.review_dir),
+            resolve_data_path(args.digests_dir),
+            resolve_data_path(args.state_dir),
+            resolve_data_path(args.runtime_flow_dir),
+            resolve_data_path(args.output),
         )
 
     if args.command == "inbox-append":
@@ -139,7 +151,7 @@ def main() -> int:
             return 2
         try:
             return run_inbox_append(
-                Path(args.inbox_path),
+                resolve_data_path(args.inbox_path),
                 args.capture_type,
                 args.content,
                 args.source,
@@ -154,7 +166,7 @@ def main() -> int:
     if args.command == "state-append":
         try:
             return run_state_append(
-                Path(args.state_path),
+                resolve_data_path(args.state_path),
                 args.energy,
                 args.mood,
                 args.body,
@@ -176,11 +188,11 @@ def main() -> int:
             args.review_dir = "demo/review"
             args.digests_dir = "demo/digests"
         return run_export_site_data(
-            Path(args.objects_dir),
-            Path(args.review_dir),
-            Path(args.digests_dir),
-            Path(args.private_out),
-            Path(args.runtime_out),
+            resolve_data_path(args.objects_dir) if args.profile != "demo" else resolve_core_path(args.objects_dir),
+            resolve_data_path(args.review_dir) if args.profile != "demo" else resolve_core_path(args.review_dir),
+            resolve_data_path(args.digests_dir) if args.profile != "demo" else resolve_core_path(args.digests_dir),
+            resolve_core_path(args.private_out),
+            resolve_data_path(args.runtime_out),
         )
 
     if args.command == "serve":

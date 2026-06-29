@@ -825,6 +825,60 @@ draft -> revised -> archived
 
 ---
 
+## 6.1 Data Root Foundation
+
+PKOS v0.5 separates the code repository from the selected data root.
+
+### Core Root
+
+Core Root is the PKOS code repository. It contains:
+
+```text
+tools/
+docs/
+README.md
+AGENTS.md
+site-private/
+demo/
+schema files
+```
+
+### Data Root
+
+Data Root contains real operational and knowledge data:
+
+```text
+objects/
+review/
+digests/
+raw_vault/
+inbox/
+state/
+runtime/
+```
+
+If `PKOS_DATA_ROOT` is unset, Data Root defaults to Core Root. If `PKOS_DATA_ROOT` is set, data commands read and write under that path while tools, docs, schema, and frontend source remain loaded from Core Root.
+
+Long-term recommended deployment:
+
+```text
+pkos-core   # public-safe: tools, docs, schema, demo
+pkos-vault  # private: objects, inbox, state, review logs, digests, runtime
+```
+
+Server example:
+
+```bash
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos inbox-append --capture-type note --content "server test"
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos state-append --energy low --mood calm --body normal
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos gen-flow
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context
+```
+
+Moonlolo should use `PKOS_DATA_ROOT` to read bounded context and append low-risk local logs without writing into public-safe core files.
+
+---
+
 ## 7. Main Data Flows
 
 ## 7.1 Capture Flow

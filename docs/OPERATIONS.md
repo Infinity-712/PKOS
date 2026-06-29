@@ -2,6 +2,41 @@
 
 本文件记录当前主线的本地运行流程。PKOS 当前只作为私密个人知识与能动性系统，不维护公开内容链路。
 
+## Core Root / Data Root
+
+未设置 `PKOS_DATA_ROOT` 时，data root 默认为当前仓库根目录。
+
+设置 `PKOS_DATA_ROOT` 后，`objects/`、`review/`、`digests/`、`inbox/`、`state/`、`runtime/` 都从 data root 读取或写入；代码、docs、schema、`AGENTS.md`、`site-private/` 仍属于 core root。
+
+PowerShell：
+
+```powershell
+$env:PKOS_DATA_ROOT="E:\Creation\PKOS-Vault"
+python -m tools.pkos gen-flow
+python -m tools.pkos export-agent-context
+Remove-Item Env:\PKOS_DATA_ROOT
+```
+
+Ubuntu：
+
+```bash
+mkdir -p /home/infinity/apps/pkos-core
+mkdir -p /home/infinity/data/pkos-vault
+
+cd /home/infinity/apps/pkos-core
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos inbox-append --capture-type note --content "server test"
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos state-append --energy low --mood calm --body normal
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos gen-flow
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context
+```
+
+长期推荐结构：
+
+```text
+pkos-core   # public-safe: tools, docs, schema, demo
+pkos-vault  # private: objects, inbox, state, review logs, digests, runtime
+```
+
 ## 日常流程
 
 1. 校验对象：

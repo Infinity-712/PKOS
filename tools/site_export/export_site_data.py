@@ -19,9 +19,14 @@ def _write_json(path: Path, data: Any) -> None:
 def _export_private_index(objects_dir: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     idx, issues = build_object_index(objects_dir)
     items: list[dict[str, Any]] = []
+    path_base = objects_dir.parent
     for rec in sorted(idx.values(), key=lambda r: (r.object_type, r.status, r.object_id)):
         d = rec.data
         tags = d.get("tags") if isinstance(d.get("tags"), list) else []
+        try:
+            display_path = rec.path.relative_to(path_base).as_posix()
+        except ValueError:
+            display_path = rec.path.as_posix()
         item = {
             "id": rec.object_id,
             "type": rec.object_type,
@@ -32,7 +37,7 @@ def _export_private_index(objects_dir: Path) -> tuple[list[dict[str, Any]], dict
             "tags": [str(t) for t in tags],
             "created_at": str(d.get("created_at") or ""),
             "updated_at": str(d.get("updated_at") or ""),
-            "path": rec.path.as_posix(),
+            "path": display_path,
         }
 
         optional_blocks = [
@@ -103,10 +108,15 @@ def _extract_digest_refs(path: Path) -> list[str]:
 
 def _export_private_digests(digests_dir: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
+    path_base = digests_dir.parent
     for p in sorted(digests_dir.glob("*.md"), key=lambda x: x.name):
         m = WEEK_RE.match(p.name)
         if not m:
             continue
+        try:
+            display_path = p.relative_to(path_base).as_posix()
+        except ValueError:
+            display_path = p.as_posix()
         lines = p.read_text(encoding="utf-8").splitlines()
         title = lines[0].lstrip("# ").strip() if lines else p.stem
         entry_count = sum(1 for ln in lines if ln.startswith("| `"))
@@ -114,7 +124,7 @@ def _export_private_digests(digests_dir: Path) -> list[dict[str, Any]]:
             {
                 "week": m.group(1),
                 "title": title,
-                "path": p.as_posix(),
+                "path": display_path,
                 "entry_count": entry_count,
                 "references": _extract_digest_refs(p),
             }

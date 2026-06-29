@@ -102,6 +102,38 @@ Flow Hub must never directly edit AGENTS.md, docs governance files, schema files
 
 ## Implementation Contract
 
+### Core Root / Data Root
+
+Flow Hub distinguishes the code repository from the selected data root.
+
+Core root contains:
+
+- `tools/`
+- `docs/`
+- `README.md`
+- `AGENTS.md`
+- `site-private/`
+- `demo/`
+- schema files
+
+Data root contains:
+
+- `objects/`
+- `review/`
+- `digests/`
+- `raw_vault/`
+- `inbox/`
+- `state/`
+- `runtime/`
+
+If `PKOS_DATA_ROOT` is unset, data root defaults to core root. If `PKOS_DATA_ROOT` is set, Flow Hub reads and writes data under that path while continuing to use code, docs, and schema from core root.
+
+Example:
+
+```bash
+PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context
+```
+
 ### Required Directories
 
 Flow Hub MVP requires these directories:

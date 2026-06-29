@@ -27,6 +27,7 @@ class QueueItem:
     title: str
     due_at: str
     path: Path
+    display_path: str
 
 
 def _parse_iso(value: str) -> datetime | None:
@@ -65,6 +66,7 @@ def _collect_items(objects_root: Path, now: datetime) -> tuple[list[QueueItem], 
     daily: list[QueueItem] = []
     weekly: list[QueueItem] = []
     notes: list[str] = []
+    path_base = objects_root.parent.resolve()
 
     for path in iter_object_files(objects_root):
         obj, errs = load_yaml(path)
@@ -89,7 +91,11 @@ def _collect_items(objects_root: Path, now: datetime) -> tuple[list[QueueItem], 
             continue
 
         title = str(obj.get("title") or obj.get("summary") or obj.get("definition") or obj.get("claim_statement") or obj_id)
-        item = QueueItem(obj_id=obj_id, obj_type=obj_type, title=title, due_at=due_at, path=path)
+        try:
+            display_path = path.resolve().relative_to(path_base).as_posix()
+        except ValueError:
+            display_path = path.as_posix()
+        item = QueueItem(obj_id=obj_id, obj_type=obj_type, title=title, due_at=due_at, path=path, display_path=display_path)
 
         if obj_type in {"fact", "skill"}:
             daily.append(item)
@@ -109,8 +115,7 @@ def _write_queue(path: Path, title: str, items: list[QueueItem], generated_at: s
         lines.append("| id | summary | due_at | path |")
         lines.append("|---|---|---|---|")
         for item in items:
-            rel_path = item.path.as_posix()
-            lines.append(f"| `{item.obj_id}` | {item.title} | `{item.due_at}` | [{rel_path}]({rel_path}) |")
+            lines.append(f"| `{item.obj_id}` | {item.title} | `{item.due_at}` | [{item.display_path}]({item.display_path}) |")
     lines.append("")
     path.write_text("\n".join(lines), encoding="utf-8")
 
