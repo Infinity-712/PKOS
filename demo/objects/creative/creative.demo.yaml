@@ -1,0 +1,11 @@
+id: creative.demo
+type: creative
+status: draft
+title: "Creative demo"
+summary: "Creative demo summary"
+content: "A short creative body used for preview demonstration."
+created_at: "2026-02-11T20:00:00Z"
+updated_at: "2026-02-13T12:00:00Z"
+tags:
+  - preview
+  - creative

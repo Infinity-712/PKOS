@@ -1,0 +1,17 @@
+id: claim.invalid.trusted
+type: claim
+status: trusted
+source:
+  - "https://example.com/reference"
+anchors:
+  - "arg-1"
+created_at: "2026-02-12T10:00:00Z"
+updated_at: "2026-02-12T10:00:00Z"
+claim_statement: "某方法在所有场景都最优"
+assumptions:
+  - "数据分布稳定"
+evidence:
+  - "fact.valid.trusted"
+scope: "仅适用于小样本数据"
+invalidation_conditions:
+  - "样本分布变化时失效"

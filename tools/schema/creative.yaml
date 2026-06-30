@@ -1,0 +1,26 @@
+type_value: creative
+required_fields:
+  - id
+  - type
+  - title
+  - summary
+  - created_at
+  - updated_at
+  - tags
+optional_fields:
+  - content
+non_empty_fields:
+  - id
+  - type
+  - title
+  - created_at
+  - updated_at
+enum_fields:
+  type:
+    - creative
+  status:
+    - draft
+    - revised
+    - archived
+field_rules: []
+trusted_rules: []

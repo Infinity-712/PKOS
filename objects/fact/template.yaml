@@ -1,11 +1,21 @@
 id: fact.template
 type: fact
 status: raw
+title: ""
+summary: ""
+content: ""
 source:
-  - ""
-anchors: []
-created_at: ""
-updated_at: ""
+  - "TODO: add source"
+anchors:
+  - "TODO: add anchor"
+created_at: "1970-01-01T00:00:00Z"
+updated_at: "1970-01-01T00:00:00Z"
+tags: []
 definition: ""
 counter_examples: []
 verification_sources: []
+srs:
+  due_at: "2099-01-01T00:00:00Z"
+  interval_days: 1
+  ease: 2.5
+  last_reviewed_at: ""

@@ -1,0 +1,48 @@
+type_value: skill
+required_fields:
+  - id
+  - type
+  - status
+  - source
+  - anchors
+  - created_at
+  - updated_at
+optional_fields:
+  - content
+non_empty_fields:
+  - id
+  - type
+  - status
+  - created_at
+  - updated_at
+enum_fields:
+  type:
+    - fact
+    - skill
+    - claim
+  status:
+    - raw
+    - parsed
+    - challenged
+    - trusted
+    - deprecated
+field_rules:
+  - rule: min_items
+    field: source
+    min: 1
+trusted_rules:
+  - rule: min_items
+    field: practice_log
+    min: 1
+  - rule: contains_success_and_failure
+    field: practice_log
+    success_tokens:
+      - 成功
+      - success
+      - pass
+      - done
+    failure_tokens:
+      - 失败
+      - fail
+      - error
+      - miss

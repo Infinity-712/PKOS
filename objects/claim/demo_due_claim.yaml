@@ -1,0 +1,25 @@
+id: claim.demo.due
+type: claim
+status: challenged
+title: "Claim demo due"
+source:
+  - "https://example.com/claim"
+anchors:
+  - "sec-3"
+created_at: "2026-02-12T10:00:00Z"
+updated_at: "2026-02-12T10:00:00Z"
+claim_statement: "A demo claim"
+assumptions:
+  - "sample assumption"
+evidence:
+  - "fact.demo.due"
+counter_arguments:
+  - "强反对：在低质量数据下失效"
+scope: "limited scope"
+invalidation_conditions:
+  - "input distribution drift"
+srs:
+  due_at: "2020-01-03T00:00:00Z"
+  interval_days: 7
+  ease: 2.4
+  last_reviewed_at: ""

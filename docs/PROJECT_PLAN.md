@@ -1,417 +1,148 @@
+# PKOS Project Plan
 
----
+PKOS 当前定位为私密个人知识与能动性操作系统。主线目标是维护一个 Git 可审计、可回滚、可复习、可压缩的个人知识与行动层。
 
-# 📘 项目总策划案
+## 当前边界
 
-## 项目代号：Personal Knowledge OS（PKOS）
+- 权威层：仓库内 Markdown / YAML / JSON / JSONL。
+- 派生层：dashboard 数据、Digest、RAG index、Agent Context Pack。
+- 前端：`site-private` 本地 dashboard。
+- 后端：localhost-only FastAPI。
+- Agent：协作者与执行辅助，不拥有权威裁决权。
 
-**当前版本**：v0.1  
-**状态**：设计中（Design Phase）  
-**维护者**：Infinity 
-**最后更新** 2026/2/12
+当前阶段不建设公开内容链路；creative 类型只作为内部创作对象。
 
----
+## 对象系统
 
-## 一、项目背景与核心问题
+可信知识轨道：
 
-### 1.1 背景动机
+- `fact`
+- `skill`
+- `claim`
 
-在大模型深度介入学习、写作与知识生产的背景下，个人学习面临两类结构性风险：
+内部创作轨道：
 
-1. **认知退化风险**
-    
-    - AI 生成内容高度流畅但低可验证
-        
-    - 原始来源逐渐被“二手总结”替代
-        
-    - 不确定性被系统性压低
-        
-2. **知识失控风险**
-    
-    - 知识碎片化、无法复用
-        
-    - 复习依赖主观意志，难以长期坚持
-        
-    - 不同类型知识（事实 / 技能 / 观点）被混用，导致低效
-        
+- `creative`
 
-### 1.2 核心问题定义
+可信知识状态机：
 
-> 如何构建一个 **以人类裁决为核心、以 LLM 为协作者** 的个人知识系统，  
-> 在 **长期使用** 下同时满足：
-> 
-> - 抗 AI 认知退化
->     
-> - 高效复习与统筹管理
->     
-> - 支持多类型知识（事实 / 技能 / 观点）
->     
-> - 可公开输出（博客）但不牺牲可信度
->     
-
----
-
-## 二、项目总体目标（Objectives）
-
-### 2.1 一级目标（不可妥协）
-
-1. **抗退化**
-    
-    - 保留原始来源
-        
-    - 强制证据链与可证伪结构
-        
-    - 防止 AI 幻觉进入“稳定知识层”
-        
-2. **可复习**
-    
-    - 所有重要知识最终必须转化为可复习对象
-        
-    - 复习应可被系统调度，而非完全依赖意志力
-        
-3. **人类裁决优先**
-    
-    - LLM 永远不拥有最终判断权
-        
-    - 人是“裁判节点”，不是“被服务对象”
-        
-
-
----
-
-### 2.2 二级目标（工程与体验）
-
-- 模块化设计，可渐进实现
-    
-- 与 Obsidian / Markdown / Git 友好
-    
-- 可接入多家 LLM API（非绑定）
-    
-- 博客输出与内部知识库解耦
-    
-
----
-
-## 三、核心设计哲学（Design Principles）
-
-### P1：知识不是文本，而是“状态机对象”
-
-每一条知识必须有状态：
-
-- `raw`
-    
-- `parsed`
-    
-- `challenged`
-    
-- `trusted`
-    
-- `deprecated`
-    
-
-系统行为围绕 **状态迁移** 展开，而不是“堆内容”。
-
----
-
-### P2：先对抗，再整合
-
-- 任何观点（Claim）必须经历至少一次**结构性反对**
-    
-- AI 默认角色是 **对抗者 / 质疑者**
-    
-- 总结与整合只发生在对抗之后
-    
-
----
-
-### P3：分类优先于数量
-
-所有知识必须归属于三类之一：
-
-|类型|说明|
-|---|---|
-|Fact|可核查事实（定义、公式、语法、API 行为等）|
-|Skill|需要练习的能力（算法、编程、解题、语言输出）|
-|Claim|依赖论证的观点或判断|
-
-不同类型使用**不同复习与评估逻辑**。
-
----
-
-### P4：博客是“对外证伪接口”
-
-博客不是成果展示，而是：
-
-- 暴露假设
-    
-- 接受反驳
-    
-- 记录修订
-    
-
-博客内容只能来自 `trusted` 状态知识。
-
----
-
-## 四、系统总体架构（逻辑层）
-
-```
-[ Ingest ]
-   ↓
-[ Raw Vault ]
-   ↓
-[ Parse & Index ]
-   ↓
-[ Knowledge Graph ]
-   ↓
-[ Review Engine ] ←→ [ LLM Services ]
-   ↓
-[ Blog / Output ]
+```text
+raw -> parsed -> challenged -> trusted -> deprecated
 ```
 
-### 关键分层说明
+creative 生命周期：
 
-- **Raw Vault**：不可修改的原始现实
-    
-- **Knowledge Graph**：你“已经消化”的知识
-    
-- **Review Engine**：长期价值的核心
-    
-- **LLM Services**：工具层，而非权威层
-    
-
----
-
-## 五、知识对象规范（核心数据模型）
-
-### 5.1 通用字段（所有类型）
-
-```yaml
-id:
-type: fact | skill | claim
-status: raw | parsed | challenged | trusted | deprecated
-source:
-anchors:
-created_at:
-updated_at:
+```text
+draft -> revised -> archived
 ```
 
----
+## 已落地能力
 
-### 5.2 Fact 对象
+### v0.1 Validation
 
-**定义**：
+- 对象 schema 校验；
+- trusted 最低条件校验；
+- common object index；
+- `python -m tools.pkos validate`。
 
-> 可被第三方独立验证的陈述
+### v0.2 Review Queue
 
-**额外字段**：
+- SRS 字段初始化；
+- Daily 队列：fact + skill；
+- Weekly 队列：claim；
+- review queue Markdown 生成；
+- `python -m tools.pkos gen-queue`。
 
-```yaml
-definition:
-counter_examples:
-verification_sources:
+### v0.3 Digest + Private Dashboard
+
+- `python -m tools.pkos gen-digest`；
+- Digest references 可追溯；
+- `python -m tools.pkos export-site-data`；
+- `site-private/dashboard` 本地 dashboard；
+- objects / queues / digests / review 的静态浏览。
+
+### v0.4 Local Backend MVP
+
+- FastAPI 本地后端；
+- `127.0.0.1` 默认监听；
+- objects / rendered / queues / digests 只读 API；
+- `ratings:batch` 确定性写回；
+- append-only review log；
+- SRS 更新；
+- auto commit；
+- token + localhost 最小保护。
+
+## 下一阶段方向
+
+### v0.5 Flow Hub
+
+Flow Hub 作为 PKOS 与月洛洛 / 前端之间的运行中枢，优先支持：
+
+- Inbox；
+- Current State；
+- Today Queue；
+- Review Queue；
+- Recovery Queue；
+- Writing Queue；
+- Flow Budget；
+- Agent Context Pack。
+
+Flow Hub 不替代权威层，不迁移 trusted，不绕过 Git 审计。
+
+v0.5 架构主文档见 `docs/ARCHITECTURE_V0.5.md`。配套契约：
+
+- `docs/FLOW_HUB_CONTRACT.md`
+- `docs/AGENT_AUTHORITY_BOUNDARY.md`
+- `docs/RAG_SIDECAR_DESIGN.md`
+
+目录骨架：
+
+- `inbox/`：低摩擦捕获池；
+- `runtime/`：派生上下文、索引、private site 镜像；
+- `runtime/site-private/_pkos/`：dashboard 导出数据的 v0.5 runtime 镜像。
+
+### v0.6 RAG Sidecar
+
+RAG Sidecar 是可删除、可重建的派生检索层：
+
+- chunk 指向 `source_path` / `object_id` / `status`；
+- 检索结果保留对象状态；
+- Agent 必须区分 raw / parsed / challenged / trusted / deprecated / creative；
+- RAG 结果不得绕过 trusted 门禁。
+
+### v0.7 Multi-surface Frontend
+
+在 private-first 前提下扩展：
+
+- PWA；
+- Desktop App；
+- Android App；
+- 多端统一调用本地或私有 API。
+
+## 当前基础命令
+
+```bash
+python -m tools.pkos validate
+python -m tools.pkos gen-queue
+python -m tools.pkos gen-digest --week 2026-W07
+python -m tools.pkos export-site-data
+python -m tools.pkos serve --port 8787
 ```
 
-**进入 trusted 的最低条件**：
+## 计划命令
 
-- ≥1 个可靠来源
-    
-- 已标注最易错点
-    
-
----
-
-### 5.3 Skill 对象
-
-**定义**：
-
-> 只能通过练习内化的能力
-
-**额外字段**：
-
-```yaml
-canonical_example:
-common_mistakes:
-practice_log:
+```bash
+python -m tools.pkos export-agent-context
+python -m tools.pkos export-index
+python -m tools.pkos gen-flow
 ```
 
-**进入 trusted 的最低条件**：
+## 验收原则
 
-- ≥1 次成功实践
-    
-- ≥1 个失败案例分析
-    
-
----
-
-### 5.4 Claim 对象
-
-**定义**：
-
-> 依赖前提与推理的判断
-
-**额外字段**：
-
-```yaml
-claim_statement:
-assumptions:
-evidence:
-counter_arguments:
-scope:
-```
-
-**进入 trusted 的最低条件**：
-
-- 至少一次强反对
-    
-- 明确适用范围与失效条件
-    
-
----
-
-## 六、LLM 使用边界（硬性约束）
-
-### 6.1 允许的角色
-
-- 结构化提取器
-    
-- 反对意见生成器
-    
-- 复习出题者
-    
-- 草稿生成助手（非终稿）
-    
-
----
-
-### 6.2 禁止的角色
-
-- 最终事实裁定者
-    
-- 引用来源的“伪造者”
-    
-- 未经检索的确定性结论输出者
-    
-
----
-
-## 七、复习系统设计（长期可持续的核心）
-
-### 7.1 双队列机制
-
-- **Daily Queue**
-    
-    - Fact + Skill
-        
-    - 高频、短时
-        
-- **Weekly Queue**
-    
-    - Claim
-        
-    - 低频、深度
-        
-
----
-
-### 7.2 复习评价权
-
-- LLM：出题
-    
-- 人类：判分
-    
-- 系统：调度
-    
-
----
-
-## 八、博客发布规则（发布门禁）
-
-一篇文章允许发布，必须满足：
-
-- 所引用知识节点全部为 `trusted`
-    
-- 明确列出：
-    
-    - 假设
-        
-    - 失效条件
-        
-    - 最后更新日期
-        
-- 自动生成修订日志模板
-    
-
----
-
-## 九、实施路线图（Roadmap）
-
-### Phase 0：规范先行
-
-- 建立文件结构
-    
-- 定义 YAML schema
-    
-- 固定笔记模板
-    
-
-### Phase 1：复习优先
-
-- 实现 Review Queue 生成
-    
-- 引入 LLM 出题
-    
-
-### Phase 2：对抗系统
-
-- Claim 强制反对流程
-    
-- 幻觉检测与标注
-    
-
-### Phase 3：博客整合
-
-- 发布门禁
-    
-- 引用与状态校验
-    
-
----
-
-## 十、非目标（Explicit Non-goals）
-
-- 不追求“全自动知识系统”
-    
-- 不以 AI 替代判断为目标
-    
-- 不追求内容规模最大化
-    
-
----
-
-## 十一、变更日志（Changelog）
-
-```md
-## v0.1
-- 初始总架构与设计原则确立
-```
-
----
-
-## 十二、下一步建议（放在项目 TODO）
-
--  细化目录结构（Obsidian 版）
-    
--  定义最小复习卡模板
-    
--  编写第一版 LLM Prompt 套件
-    
--  确定技术栈与 API 接入方式
-    
-
----
-
-### 一句话结语（作为项目精神）
-
-> **这个系统的目的，不是让你“知道更多”，  
-> 而是让你在 5 年后，仍然知道哪些东西你真的知道。**
+- 权威层文件可 Git diff / rollback；
+- 复习日志 append-only；
+- Dashboard 不直接写权威文件；
+- 后端写回必须走确定性接口；
+- Agent 不拥有 trusted 写权限；
+- Digest 不创造新事实；
+- RAG 与前端导出均为派生缓存。

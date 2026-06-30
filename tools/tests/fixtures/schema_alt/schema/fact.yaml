@@ -1,0 +1,39 @@
+type_value: fact
+required_fields:
+  - id
+  - type
+  - status
+  - source
+  - anchors
+  - created_at
+  - updated_at
+  - extra_required
+non_empty_fields:
+  - id
+  - type
+  - status
+  - created_at
+  - updated_at
+enum_fields:
+  type:
+    - fact
+    - skill
+    - claim
+  status:
+    - raw
+    - parsed
+    - challenged
+    - trusted
+    - deprecated
+field_rules:
+  - rule: min_items
+    field: source
+    min: 1
+trusted_rules:
+  - rule: min_items
+    field: verification_sources
+    min: 1
+  - rule: any_non_empty
+    fields:
+      - counter_examples
+      - easiest_mistakes

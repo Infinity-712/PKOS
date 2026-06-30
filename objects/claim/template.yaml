@@ -1,13 +1,24 @@
 id: claim.template
 type: claim
 status: raw
+title: ""
+summary: ""
+content: ""
 source:
-  - ""
-anchors: []
-created_at: ""
-updated_at: ""
+  - "TODO: add source"
+anchors:
+  - "TODO: add anchor"
+created_at: "1970-01-01T00:00:00Z"
+updated_at: "1970-01-01T00:00:00Z"
+tags: []
 claim_statement: ""
 assumptions: []
 evidence: []
 counter_arguments: []
 scope: ""
+invalidation_conditions: []
+srs:
+  due_at: "2099-01-01T00:00:00Z"
+  interval_days: 1
+  ease: 2.5
+  last_reviewed_at: ""

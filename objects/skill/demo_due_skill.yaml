@@ -1,0 +1,21 @@
+id: skill.demo.due
+type: skill
+status: parsed
+title: "Skill demo due"
+source:
+  - "https://example.com/skill"
+anchors:
+  - "sec-2"
+created_at: "2026-02-12T10:00:00Z"
+updated_at: "2026-02-12T10:00:00Z"
+canonical_example: "demo"
+common_mistakes:
+  - "遗漏边界条件"
+practice_log:
+  - "success: completed once"
+  - "failure: missed edge case"
+srs:
+  due_at: "2020-01-02T00:00:00Z"
+  interval_days: 2
+  ease: 2.5
+  last_reviewed_at: ""
