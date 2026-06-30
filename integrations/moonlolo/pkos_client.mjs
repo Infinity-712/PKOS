@@ -1,5 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { spawnSync } from "child_process";
+import { pathToFileURL } from "url";
 
 const DEFAULT_CORE_ROOT = process.env.PKOS_CORE_ROOT || "/home/infinity/apps/pkos-core";
 const DEFAULT_DATA_ROOT = process.env.PKOS_DATA_ROOT || "/home/infinity/data/pkos-vault";
@@ -84,12 +84,20 @@ function runPkos(args, options = {}) {
     if (result.stdout && result.stdout.trim().startsWith("{")) {
       try {
         payload = JSON.parse(result.stdout);
-      } catch {
+      } catch (error) {
         payload = null;
       }
     }
-    throw new PKOSBridgeError(result.stderr || payload?.error?.message || result.stdout || `PKOS command failed: ${command}`, {
-      code: payload?.error?.code || "PKOS_COMMAND_FAILED",
+    const payloadErrorMessage =
+      payload && payload.error && payload.error.message
+        ? payload.error.message
+        : null;
+    const payloadErrorCode =
+      payload && payload.error && payload.error.code
+        ? payload.error.code
+        : "PKOS_COMMAND_FAILED";
+    throw new PKOSBridgeError(result.stderr || payloadErrorMessage || result.stdout || `PKOS command failed: ${command}`, {
+      code: payloadErrorCode,
       command,
       status: result.status,
       stdout: result.stdout,

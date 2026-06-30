@@ -33,6 +33,8 @@ def main() -> int:
     )
 
     forbidden_snippets = [
+        "?.",
+        "??",
         "shell: true",
         "exec(",
         "execSync(",
@@ -41,6 +43,11 @@ def main() -> int:
     for snippet in forbidden_snippets:
         if snippet in adapter_text:
             return _fail(f"adapter contains forbidden subprocess pattern: {snippet}")
+
+    for line_no, line in enumerate(adapter_text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("await ") or stripped.startswith("await("):
+            return _fail(f"adapter contains top-level await-like syntax at line {line_no}")
 
     required_snippets = [
         "spawnSync(",

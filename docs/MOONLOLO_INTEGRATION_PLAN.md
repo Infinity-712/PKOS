@@ -63,6 +63,8 @@ The reviewed adapter template lives at:
 integrations/moonlolo/pkos_client.mjs
 ```
 
+The template is Node v12.22.9 compatible. Do not require a Node upgrade for the bridge adapter, and do not add npm dependencies. Avoid optional chaining, nullish coalescing, top-level await, `Array.prototype.at()`, class fields, import assertions, and `node:` builtin import prefixes.
+
 It can later be copied manually into:
 
 ```text
@@ -70,7 +72,7 @@ It can later be copied manually into:
 ```
 
 ```js
-import { spawnSync } from "node:child_process";
+import { spawnSync } from "child_process";
 
 export function appendInbox(content) {
   const result = spawnSync(
@@ -104,7 +106,11 @@ export function appendInbox(content) {
 
   const payload = JSON.parse(result.stdout);
   if (!payload.ok) {
-    throw new Error(payload.error?.message || "PKOS append failed");
+    const message =
+      payload && payload.error && payload.error.message
+        ? payload.error.message
+        : "PKOS append failed";
+    throw new Error(message);
   }
   return payload;
 }

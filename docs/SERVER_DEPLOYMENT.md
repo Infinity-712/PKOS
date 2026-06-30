@@ -90,6 +90,8 @@ It is a template for later manual integration into:
 
 The adapter uses Node `spawnSync` with argument arrays. It does not use shell command concatenation and only calls allowlisted PKOS commands:
 
+The adapter is compatible with the existing Node v12.22.9 server runtime. Do not require a Node upgrade and do not add npm dependencies for this bridge. Keep the adapter free of optional chaining, nullish coalescing, top-level await, `Array.prototype.at()`, class fields, import assertions, and `node:` builtin import prefixes.
+
 - `paths --json`
 - `doctor --json`
 - `export-agent-context --print`

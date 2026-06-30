@@ -4,6 +4,8 @@ This directory is an adapter example only. It is not the production `moonlolo-re
 
 The adapter demonstrates how Moonlolo can call PKOS through a bounded subprocess interface without reading or writing PKOS authority files directly.
 
+The example targets Node v12.22.9 compatibility. It intentionally avoids optional chaining, nullish coalescing, top-level await, `Array.prototype.at()`, class fields, import assertions, npm dependencies, and `node:` builtin import prefixes.
+
 Allowed calls:
 
 - `paths --json`
