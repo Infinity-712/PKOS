@@ -10,6 +10,7 @@ const ALLOWED_COMMANDS = new Set([
   "paths",
   "doctor",
   "export-agent-context",
+  "gen-flow",
   "inbox-append",
   "state-append",
 ]);
@@ -106,6 +107,10 @@ function runPkos(args, options = {}) {
     });
   }
 
+  if (options.expectJson === false) {
+    return result.stdout;
+  }
+
   return parseJson(result.stdout, command);
 }
 
@@ -118,6 +123,7 @@ export function doctor(options = {}) {
 }
 
 export function getAgentContext(options = {}) {
+  runPkos(["gen-flow"], { ...options, expectJson: false });
   return runPkos(["export-agent-context", "--print"], options);
 }
 
