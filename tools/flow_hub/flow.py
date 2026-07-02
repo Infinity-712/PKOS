@@ -8,12 +8,20 @@ from pathlib import Path
 from typing import Any
 
 from tools.common.object_store import build_object_index
+from tools.inbox_review.review import build_review_view, content_excerpt
 
 SCHEMA_VERSION = "0.5-alpha"
+MOONLOLO_SCHEMA_VERSION = "0.5-beta"
 DEFAULT_CONTEXT_BUDGET = {
     "max_review_items": 5,
     "max_writing_items": 5,
     "max_digest_chars": 2000,
+}
+MOONLOLO_TOKEN_BUDGET = {
+    "weekly_review_sample_items_max": 5,
+    "weekly_review_excerpt_chars_max": 120,
+    "raw_inbox_fulltext_included": False,
+    "learning_flow_included": False,
 }
 
 
@@ -304,6 +312,157 @@ def build_agent_context(
             "trusted_migration_allowed": False,
         },
     }
+
+
+def _tone_hint(state: dict[str, Any]) -> str:
+    energy = str(state.get("energy") or "unknown")
+    mood = str(state.get("mood") or "unknown")
+    body = str(state.get("body") or "unknown")
+    if energy in {"very_low", "low"}:
+        return "soft_low_pressure"
+    if mood in {"anxious", "overloaded"}:
+        return "soft_low_pressure"
+    if body in {"tired", "sleepy", "sick"}:
+        return "short_recovery"
+    return "normal"
+
+
+def _moonlolo_current_state(state_dir: Path, generated_at: str) -> dict[str, Any]:
+    model = current_state(generated_at, state_dir / "snapshots.jsonl")
+    state = model.get("state") if isinstance(model.get("state"), dict) else {}
+    payload = {
+        "energy": str(state.get("energy") or "unknown"),
+        "mood": str(state.get("mood") or "unknown"),
+        "body": str(state.get("body") or "unknown"),
+        "context": str(state.get("context") or "unknown"),
+        "mode": str(state.get("mode") or "unknown"),
+        "updated_at": state.get("updated_at") or None,
+    }
+    payload["tone_hint"] = _tone_hint(payload)
+    return payload
+
+
+def _parse_utc(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _read_jsonl_objects(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            rows.append(item)
+    return rows
+
+
+def _review_action_counts_this_week(actions_path: Path, generated_at: str) -> dict[str, int]:
+    generated_dt = _parse_utc(generated_at) or datetime.now(timezone.utc)
+    generated_week = generated_dt.isocalendar()
+    counts = {"archived": 0, "converted": 0}
+    for action in _read_jsonl_objects(actions_path):
+        if action.get("type") != "inbox_review_action" or action.get("action") != "mark_status":
+            continue
+        status = str(action.get("status") or "")
+        if status not in counts:
+            continue
+        created_dt = _parse_utc(str(action.get("created_at") or ""))
+        if created_dt is None:
+            continue
+        action_week = created_dt.isocalendar()
+        if action_week.year == generated_week.year and action_week.week == generated_week.week:
+            counts[status] += 1
+    return counts
+
+
+def _weekly_review_gate(inbox_path: Path, actions_path: Path, generated_at: str) -> dict[str, Any]:
+    review_view = build_review_view(inbox_path, actions_path, generated_at=generated_at)
+    unprocessed = [item for item in review_view.get("items", []) if item.get("effective_status") == "unprocessed"]
+    budget = MOONLOLO_TOKEN_BUDGET
+    sample_items = []
+    for item in unprocessed[: int(budget["weekly_review_sample_items_max"])]:
+        sample_items.append(
+            {
+                "id": str(item.get("id") or ""),
+                "created_at": str(item.get("created_at") or ""),
+                "source": str(item.get("source") or ""),
+                "capture_type": str(item.get("capture_type") or ""),
+                "content_excerpt": content_excerpt(
+                    str(item.get("content") or ""),
+                    int(budget["weekly_review_excerpt_chars_max"]),
+                ),
+            }
+        )
+    counts = _review_action_counts_this_week(actions_path, generated_at)
+    return {
+        "cadence": "weekly",
+        "unprocessed_inbox_count": len(unprocessed),
+        "archived_this_week": counts["archived"],
+        "converted_this_week": counts["converted"],
+        "review_required_before_weekly_summary": len(unprocessed) > 0,
+        "sample_items": sample_items,
+    }
+
+
+def build_moonlolo_agent_context(
+    state_dir: Path,
+    inbox_path: Path,
+    inbox_review_actions_path: Path,
+    generated_at: str | None = None,
+) -> dict[str, Any]:
+    ts = generated_at or utc_now()
+    return {
+        "schema_version": MOONLOLO_SCHEMA_VERSION,
+        "profile": "moonlolo",
+        "generated_at": ts,
+        "current_state": _moonlolo_current_state(state_dir, ts),
+        "reminder_state": None,
+        "weekly_review_gate": _weekly_review_gate(inbox_path, inbox_review_actions_path, ts),
+        "task_flow_stub": {
+            "enabled": False,
+            "reason": "task_system_not_implemented",
+            "active_task": None,
+            "next_action": None,
+        },
+        "write_policy": {
+            "agent_may_write": True,
+            "allowed_writes": ["inbox_append", "state_append"],
+            "forbidden_writes": [
+                "trusted",
+                "objects",
+                "tasks",
+                "task_auto_creation",
+                "weekly_summary_without_review",
+                "raw_vault_mutation",
+                "secret_reading",
+            ],
+            "authority": "runtime context only; not source of truth",
+        },
+        "token_budget": dict(MOONLOLO_TOKEN_BUDGET),
+    }
+
+
+def run_export_moonlolo_agent_context(
+    state_dir: Path,
+    inbox_path: Path,
+    inbox_review_actions_path: Path,
+    output_path: Path,
+) -> int:
+    context = build_moonlolo_agent_context(state_dir, inbox_path, inbox_review_actions_path)
+    write_json(output_path, context)
+    print(f"generated: {output_path.as_posix()}")
+    return 0
 
 
 def run_export_agent_context(

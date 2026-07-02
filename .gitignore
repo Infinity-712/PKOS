@@ -10,3 +10,5 @@
 /state/*.jsonl
 !/inbox/.gitkeep
 !/state/.gitkeep
+__pycache__/
+*.py[cod]

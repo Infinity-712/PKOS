@@ -5,7 +5,7 @@ Usage:
   python -m tools.pkos gen-queue [--objects objects --review review]
   python -m tools.pkos gen-digest [--objects-dir objects --output-dir digests --week YYYY-Www]
   python -m tools.pkos gen-flow [--objects-dir objects --review-dir review --state-dir state --runtime-flow-dir runtime/flow]
-  python -m tools.pkos export-agent-context [--objects-dir objects --review-dir review --digests-dir digests --state-dir state --runtime-flow-dir runtime/flow --output runtime/agent_context.json]
+  python -m tools.pkos export-agent-context [--profile default|moonlolo] [--objects-dir objects --review-dir review --digests-dir digests --state-dir state --runtime-flow-dir runtime/flow --output runtime/agent_context.json]
   python -m tools.pkos inbox-append --capture-type note --content "..."
   python -m tools.pkos inbox-review list [--json]
   python -m tools.pkos inbox-review mark --id <inbox_id> --status archived --reason "reviewed"
@@ -43,7 +43,14 @@ from tools.flow_hub.append_logs import (
     run_inbox_append,
     run_state_append,
 )
-from tools.flow_hub.flow import build_agent_context, run_export_agent_context, run_gen_flow, write_json
+from tools.flow_hub.flow import (
+    build_agent_context,
+    build_moonlolo_agent_context,
+    run_export_agent_context,
+    run_export_moonlolo_agent_context,
+    run_gen_flow,
+    write_json,
+)
 from tools.inbox_review.review import (
     ALLOWED_STATUSES as INBOX_REVIEW_STATUSES,
     content_excerpt,
@@ -319,6 +326,12 @@ def main() -> int:
     context_parser.add_argument("--runtime-flow-dir", default="runtime/flow", help="Flow runtime input directory")
     context_parser.add_argument("--output", default="runtime/agent_context.json", help="Agent context output path")
     context_parser.add_argument(
+        "--profile",
+        choices=["default", "moonlolo"],
+        default="default",
+        help="Context profile to export",
+    )
+    context_parser.add_argument(
         "--print",
         "--stdout",
         action="store_true",
@@ -428,6 +441,25 @@ def main() -> int:
         )
 
     if args.command == "export-agent-context":
+        if args.profile == "moonlolo":
+            inbox_path = resolve_data_path("inbox", "items.jsonl")
+            inbox_review_actions_path = resolve_data_path(args.review_dir, "logs", "inbox_review_actions.jsonl")
+            if args.print_json:
+                context = build_moonlolo_agent_context(
+                    resolve_data_path(args.state_dir),
+                    inbox_path,
+                    inbox_review_actions_path,
+                )
+                write_json(resolve_data_path(args.output), context)
+                _print_json(context)
+                return 0
+            return run_export_moonlolo_agent_context(
+                resolve_data_path(args.state_dir),
+                inbox_path,
+                inbox_review_actions_path,
+                resolve_data_path(args.output),
+            )
+
         if args.print_json:
             context = build_agent_context(
                 resolve_data_path(args.objects_dir),
