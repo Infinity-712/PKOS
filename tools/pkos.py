@@ -7,6 +7,8 @@ Usage:
   python -m tools.pkos gen-flow [--objects-dir objects --review-dir review --state-dir state --runtime-flow-dir runtime/flow]
   python -m tools.pkos export-agent-context [--objects-dir objects --review-dir review --digests-dir digests --state-dir state --runtime-flow-dir runtime/flow --output runtime/agent_context.json]
   python -m tools.pkos inbox-append --capture-type note --content "..."
+  python -m tools.pkos inbox-review list [--json]
+  python -m tools.pkos inbox-review mark --id <inbox_id> --status archived --reason "reviewed"
   python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
   python -m tools.pkos paths [--json]
   python -m tools.pkos doctor [--json]
@@ -42,6 +44,12 @@ from tools.flow_hub.append_logs import (
     run_state_append,
 )
 from tools.flow_hub.flow import build_agent_context, run_export_agent_context, run_gen_flow, write_json
+from tools.inbox_review.review import (
+    ALLOWED_STATUSES as INBOX_REVIEW_STATUSES,
+    content_excerpt,
+    run_list as run_inbox_review_list,
+    run_mark as run_inbox_review_mark,
+)
 from tools.pkos_paths import (
     display_data_path,
     get_core_root,
@@ -62,6 +70,7 @@ COMMAND_NAMES = {
     "gen-flow",
     "export-agent-context",
     "inbox-append",
+    "inbox-review",
     "state-append",
     "paths",
     "doctor",
@@ -249,6 +258,29 @@ def _append_json_payload(item: dict, path: Path) -> dict:
     }
 
 
+def _print_inbox_review_list(view: dict) -> None:
+    print(f"generated_at: {view['generated_at']}")
+    print(f"count: {view['count']}")
+    if not view["items"]:
+        print("_No inbox items._")
+        return
+    print("id | status | source | capture_type | created_at | content")
+    print("---|---|---|---|---|---")
+    for item in view["items"]:
+        print(
+            " | ".join(
+                [
+                    str(item.get("id") or ""),
+                    str(item.get("effective_status") or ""),
+                    str(item.get("source") or ""),
+                    str(item.get("capture_type") or ""),
+                    str(item.get("created_at") or ""),
+                    content_excerpt(str(item.get("content") or "")),
+                ]
+            )
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="pkos", description="PKOS utility commands")
     parser.add_argument("--data-root", default=None, help="Override PKOS_DATA_ROOT for this command")
@@ -303,6 +335,27 @@ def main() -> int:
     inbox_parser.add_argument("--metadata-json", default=None)
     inbox_parser.add_argument("--inbox-path", default="inbox/items.jsonl")
     inbox_parser.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    inbox_review_parser = subparsers.add_parser("inbox-review", help="Review append-only Inbox captures")
+    inbox_review_subparsers = inbox_review_parser.add_subparsers(dest="inbox_review_command", required=True)
+    inbox_review_list = inbox_review_subparsers.add_parser("list", help="List inbox items with effective review status")
+    inbox_review_list.add_argument("--status", choices=sorted(INBOX_REVIEW_STATUSES), default=None)
+    inbox_review_list.add_argument("--source", default=None)
+    inbox_review_list.add_argument("--tag", default=None)
+    inbox_review_list.add_argument("--limit", type=int, default=None)
+    inbox_review_list.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+    inbox_review_list.add_argument("--inbox-path", default="inbox/items.jsonl")
+    inbox_review_list.add_argument("--actions-path", default="review/logs/inbox_review_actions.jsonl")
+    inbox_review_list.add_argument("--runtime-path", default="runtime/inbox_review/current.json")
+
+    inbox_review_mark = inbox_review_subparsers.add_parser("mark", help="Append an inbox review status action")
+    inbox_review_mark.add_argument("--id", required=True, dest="inbox_id")
+    inbox_review_mark.add_argument("--status", required=True, choices=sorted(INBOX_REVIEW_STATUSES))
+    inbox_review_mark.add_argument("--reason", required=True)
+    inbox_review_mark.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+    inbox_review_mark.add_argument("--inbox-path", default="inbox/items.jsonl")
+    inbox_review_mark.add_argument("--actions-path", default="review/logs/inbox_review_actions.jsonl")
+    inbox_review_mark.add_argument("--runtime-path", default="runtime/inbox_review/current.json")
 
     state_parser = subparsers.add_parser("state-append", help="Append a Current State snapshot")
     state_parser.add_argument("--energy", required=True, choices=sorted(ENERGY_VALUES))
@@ -433,6 +486,67 @@ def main() -> int:
                 return 2
             print(f"ERROR: {exc}")
             return 2
+
+    if args.command == "inbox-review":
+        inbox_path = resolve_data_path(args.inbox_path)
+        actions_path = resolve_data_path(args.actions_path)
+        runtime_path = resolve_data_path(args.runtime_path)
+        if args.inbox_review_command == "list":
+            try:
+                view = run_inbox_review_list(
+                    inbox_path,
+                    actions_path,
+                    runtime_path,
+                    args.status,
+                    args.source,
+                    args.tag,
+                    args.limit,
+                )
+            except ValueError as exc:
+                if args.json_output:
+                    _print_json(_json_error("INVALID_INBOX_REVIEW_LIST", str(exc)))
+                    return 2
+                print(f"ERROR: {exc}")
+                return 2
+            if args.json_output:
+                _print_json(view)
+            else:
+                _print_inbox_review_list(view)
+            return 0
+
+        if args.inbox_review_command == "mark":
+            try:
+                payload = run_inbox_review_mark(
+                    inbox_path,
+                    actions_path,
+                    runtime_path,
+                    args.inbox_id,
+                    args.status,
+                    args.reason,
+                )
+            except KeyError as exc:
+                message = str(exc).strip("'")
+                if args.json_output:
+                    _print_json(_json_error("INBOX_ID_NOT_FOUND", message))
+                    return 1
+                print(f"ERROR: {message}")
+                return 1
+            except ValueError as exc:
+                if args.json_output:
+                    _print_json(_json_error("INVALID_INBOX_REVIEW_ACTION", str(exc)))
+                    return 2
+                print(f"ERROR: {exc}")
+                return 2
+            if args.json_output:
+                _print_json(payload)
+            else:
+                item = payload.get("item") or {}
+                print(f"marked: {args.inbox_id} -> {args.status}")
+                print(f"action: {payload['action']['id']}")
+                print(f"runtime: {display_data_path(runtime_path)}")
+                if item:
+                    print(f"effective_status: {item.get('effective_status')}")
+            return 0
 
     if args.command == "state-append":
         try:
