@@ -114,6 +114,20 @@ function runPkos(args, options = {}) {
   return parseJson(result.stdout, command);
 }
 
+function bridgeOptions(options = {}, overrides = {}) {
+  const result = {};
+  const source = options || {};
+  Object.keys(source).forEach((key) => {
+    if (key !== "profile") {
+      result[key] = source[key];
+    }
+  });
+  Object.keys(overrides).forEach((key) => {
+    result[key] = overrides[key];
+  });
+  return result;
+}
+
 export function getPaths(options = {}) {
   return runPkos(["paths", "--json"], options);
 }
@@ -123,8 +137,23 @@ export function doctor(options = {}) {
 }
 
 export function getAgentContext(options = {}) {
-  runPkos(["gen-flow"], { ...options, expectJson: false });
-  return runPkos(["export-agent-context", "--print"], options);
+  const sourceOptions = options || {};
+  const profile = sourceOptions.profile || "default";
+  if (profile !== "default" && profile !== "moonlolo") {
+    throw new PKOSBridgeError(`Unsupported PKOS agent context profile: ${profile}`, {
+      code: "UNSUPPORTED_CONTEXT_PROFILE",
+      command: "export-agent-context",
+    });
+  }
+
+  const cleanOptions = bridgeOptions(sourceOptions);
+  runPkos(["gen-flow"], bridgeOptions(cleanOptions, { expectJson: false }));
+
+  const args = ["export-agent-context", "--print"];
+  if (profile === "moonlolo") {
+    args.splice(1, 0, "--profile", "moonlolo");
+  }
+  return runPkos(args, cleanOptions);
 }
 
 export function appendInbox({
