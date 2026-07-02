@@ -1,6 +1,7 @@
 # Flow Hub derived runtime caches
 /runtime/agent_context.json
 /runtime/flow/*.json
+/runtime/inbox_review/*.json
 !/runtime/.gitkeep
 !/runtime/flow/.gitkeep
 
