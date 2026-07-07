@@ -5,10 +5,19 @@
 !/runtime/.gitkeep
 !/runtime/flow/.gitkeep
 
+# Agent Runtime derived SQLite store
+/runtime/agent/
+/runtime/agent/*.sqlite
+/runtime/agent/*.sqlite-*
+
 # PKOS local operational logs
 /inbox/*.jsonl
 /state/*.jsonl
 !/inbox/.gitkeep
 !/state/.gitkeep
+
+# Node dependencies
+node_modules/
+
 __pycache__/
 *.py[cod]

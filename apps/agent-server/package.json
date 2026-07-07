@@ -1,0 +1,21 @@
+{
+  "name": "@pkos/agent-server",
+  "version": "0.6.0-skeleton",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "dev": "tsx src/index.ts",
+    "smoke": "tsx src/scripts/smoke.ts",
+    "context-smoke": "tsx src/scripts/contextSmoke.ts",
+    "writeback-smoke": "tsx src/scripts/writebackSmoke.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
