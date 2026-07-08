@@ -6,6 +6,8 @@ The dashboard is a private local UI for Agent Runtime operations and recovery. I
 
 It does not implement real LLM calls, Agent tool selection, RAG, memory, task or reminder scheduling, object management, trusted migration, object conversion, OpenClaw, WeChat, Electron, mobile, or production static hosting.
 
+Common browser-safe API types, guards, fetch helpers, NDJSON parsing, and request attempt state now live in `packages/agent-client`. Web-only management surfaces such as Inbox Review, Action Requests, and Audit keep their local model code and behavior boundaries unchanged.
+
 ## Run Locally
 
 Use two terminals.

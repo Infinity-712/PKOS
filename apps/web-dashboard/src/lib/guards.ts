@@ -1,45 +1,22 @@
+import {
+  isActionSubmitResponse,
+  isHealthResponse,
+  isRecord,
+  isStateTimelineResponse,
+} from "@pkos/agent-client";
 import type {
   ActionRequestDetailResponse,
   ActionRequestListResponse,
   ActionRequestView,
   ActionResolution,
   ActionResolutionResponse,
-  ActionSubmitResponse,
   AuditEventView,
   AuditEventsResponse,
-  HealthResponse,
   InboxReviewListResponse,
-  JsonObject,
-  StateTimelineResponse,
   WritebackResult,
 } from "../types.js";
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-export function asJsonObject(value: unknown): JsonObject | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-  return value as JsonObject;
-}
-
-export function isHealthResponse(value: unknown): value is HealthResponse {
-  return (
-    isRecord(value) &&
-    typeof value.ok === "boolean" &&
-    typeof value.service === "string" &&
-    typeof value.mode === "string"
-  );
-}
-
-export function isActionSubmitResponse(value: unknown): value is ActionSubmitResponse {
-  if (!isRecord(value) || typeof value.ok !== "boolean" || typeof value.requestId !== "string" || typeof value.replayed !== "boolean") {
-    return false;
-  }
-  return (value.result === undefined || isWritebackResult(value.result)) && (value.error === undefined || isApiErrorPayload(value.error));
-}
+export { asJsonObject, isActionSubmitResponse, isHealthResponse, isRecord, isStateTimelineResponse } from "@pkos/agent-client";
 
 export function isActionRequestListResponse(value: unknown): value is ActionRequestListResponse {
   return isRecord(value) && value.ok === true && Array.isArray(value.requests) && value.requests.every(isActionRequestView);
@@ -77,17 +54,6 @@ export function isInboxReviewListResponse(value: unknown): value is InboxReviewL
     value.items.every(isInboxReviewItem) &&
     typeof value.count === "number" &&
     typeof value.generatedAt === "string" &&
-    isRecord(value.filters)
-  );
-}
-
-export function isStateTimelineResponse(value: unknown): value is StateTimelineResponse {
-  return (
-    isRecord(value) &&
-    (value.current === null || isStateTimelineItem(value.current)) &&
-    Array.isArray(value.items) &&
-    value.items.every(isStateTimelineItem) &&
-    typeof value.count === "number" &&
     isRecord(value.filters)
   );
 }
@@ -164,23 +130,6 @@ function isLatestInboxReviewAction(value: unknown): boolean {
   );
 }
 
-function isStateTimelineItem(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.source === "string" &&
-    typeof value.energy === "string" &&
-    typeof value.mood === "string" &&
-    typeof value.body === "string" &&
-    typeof value.context === "string" &&
-    typeof value.mode === "string" &&
-    isRecord(value.risk) &&
-    (value.note === null || typeof value.note === "string") &&
-    typeof value.createdAt === "string" &&
-    typeof value.stale === "boolean"
-  );
-}
-
 function isWritebackResult(value: unknown): value is WritebackResult {
   return (
     isRecord(value) &&
@@ -191,8 +140,4 @@ function isWritebackResult(value: unknown): value is WritebackResult {
     (value.target === undefined || typeof value.target === "string") &&
     (value.recordId === undefined || typeof value.recordId === "string")
   );
-}
-
-function isApiErrorPayload(value: unknown): boolean {
-  return isRecord(value) && typeof value.code === "string" && typeof value.message === "string";
 }

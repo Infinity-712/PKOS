@@ -1,36 +1,21 @@
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
-export type JsonObject = { readonly [key: string]: JsonValue };
+import type { JsonObject, WritebackResult } from "@pkos/agent-client";
 
-export type HealthResponse = {
-  ok: boolean;
-  service: string;
-  mode: string;
-};
-
-export type WritebackStatus = "written" | "blocked" | "error";
-
-export type WritebackResult = {
-  status: WritebackStatus;
-  operation: string;
-  message?: string;
-  errorCode?: string;
-  target?: string;
-  recordId?: string;
-};
-
-export type ApiErrorPayload = {
-  code: string;
-  message: string;
-};
-
-export type ActionSubmitResponse = {
-  ok: boolean;
-  requestId: string;
-  replayed: boolean;
-  result?: WritebackResult;
-  error?: ApiErrorPayload;
-};
+export type {
+  ActionSubmitResponse,
+  AgentEvent,
+  ApiErrorPayload,
+  ChatSession,
+  ChatSessionListResponse,
+  CreateChatSessionResponse,
+  HealthResponse,
+  JsonObject,
+  JsonPrimitive,
+  JsonValue,
+  StateTimelineItem,
+  StateTimelineResponse,
+  WritebackResult,
+  WritebackStatus,
+} from "@pkos/agent-client";
 
 export type ActionStoredStatus = "running" | "completed" | "failed" | "indeterminate";
 export type ActionEffectiveStatus = ActionStoredStatus;
@@ -110,26 +95,5 @@ export type InboxReviewListResponse = {
   items: InboxReviewItem[];
   count: number;
   generatedAt: string;
-  filters: JsonObject;
-};
-
-export type StateTimelineItem = {
-  id: string;
-  source: string;
-  energy: string;
-  mood: string;
-  body: string;
-  context: string;
-  mode: string;
-  risk: JsonObject;
-  note: string | null;
-  createdAt: string;
-  stale: boolean;
-};
-
-export type StateTimelineResponse = {
-  current: StateTimelineItem | null;
-  items: StateTimelineItem[];
-  count: number;
   filters: JsonObject;
 };

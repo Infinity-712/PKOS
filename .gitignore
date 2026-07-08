@@ -22,6 +22,8 @@ node_modules/
 # Web Dashboard generated output
 /apps/web-dashboard/dist/
 /apps/web-dashboard/dist-smoke/
+/apps/desktop/dist/
+/packages/agent-client/dist/
 
 __pycache__/
 *.py[cod]

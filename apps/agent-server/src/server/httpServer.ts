@@ -13,6 +13,7 @@ import { ToolExecutor } from "../tools/ToolExecutor.js";
 import { createDefaultToolRegistry } from "../tools/ToolRegistry.js";
 import { WritebackRouter } from "../writeback/WritebackRouter.js";
 import { handleChatRoutes, sendJson } from "./chatRoutes.js";
+import { applyCors, handleCorsPreflight } from "./cors.js";
 
 export type AgentHttpServerOptions = {
   db?: AgentDatabase;
@@ -30,6 +31,11 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
+      if (handleCorsPreflight(req, res)) {
+        return;
+      }
+      applyCors(req, res);
+
       if (req.method === "GET" && (req.url === "/health" || req.url?.startsWith("/health?"))) {
         sendJson(res, 200, { ok: true, service: "pkos-agent-server", mode: "dry-run" });
         return;

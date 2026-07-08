@@ -10,6 +10,7 @@
     "smoke": "tsc -p tsconfig.smoke.json && node dist-smoke/scripts/smoke.js"
   },
   "dependencies": {
+    "@pkos/agent-client": "file:../../packages/agent-client",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

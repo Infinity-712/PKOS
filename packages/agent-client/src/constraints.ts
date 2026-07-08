@@ -1,0 +1,9 @@
+export const CAPTURE_TYPE_OPTIONS = ["note", "task", "thought", "emotion", "recovery", "writing", "knowledge", "state", "other"] as const;
+export const CAPTURE_SOURCE_OPTIONS = ["manual", "moonlolo", "web", "app", "import"] as const;
+export const STATE_SOURCE_OPTIONS = ["manual", "moonlolo", "web", "app"] as const;
+export const ENERGY_OPTIONS = ["unknown", "very_low", "low", "medium", "high", "overloaded"] as const;
+export const MOOD_OPTIONS = ["unknown", "calm", "anxious", "low", "excited", "numb", "irritated", "overloaded"] as const;
+export const BODY_OPTIONS = ["unknown", "normal", "sleepy", "tired", "chest_tight", "headache", "hungry", "sick"] as const;
+export const CONTEXT_OPTIONS = ["unknown", "dorm", "classroom", "library", "outside", "home", "before_sleep", "travel", "other"] as const;
+export const MODE_OPTIONS = ["unknown", "study", "writing", "recovery", "social", "quiet", "life", "project", "other"] as const;
+export const RISK_OPTIONS = ["unknown", "low", "medium", "high"] as const;
