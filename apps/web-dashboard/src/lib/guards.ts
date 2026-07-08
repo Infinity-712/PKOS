@@ -8,6 +8,7 @@ import type {
   AuditEventView,
   AuditEventsResponse,
   HealthResponse,
+  InboxReviewListResponse,
   JsonObject,
   WritebackResult,
 } from "../types.js";
@@ -68,6 +69,17 @@ export function isAuditEventsResponse(value: unknown): value is AuditEventsRespo
   );
 }
 
+export function isInboxReviewListResponse(value: unknown): value is InboxReviewListResponse {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.items) &&
+    value.items.every(isInboxReviewItem) &&
+    typeof value.count === "number" &&
+    typeof value.generatedAt === "string" &&
+    isRecord(value.filters)
+  );
+}
+
 function isActionRequestView(value: unknown): value is ActionRequestView {
   if (!isRecord(value)) {
     return false;
@@ -113,6 +125,30 @@ function isAuditEventView(value: unknown): value is AuditEventView {
     (value.sessionId === undefined || typeof value.sessionId === "string") &&
     (value.generationId === undefined || typeof value.generationId === "string") &&
     isRecord(value.payloadSummary)
+  );
+}
+
+function isInboxReviewItem(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.captureType === "string" &&
+    typeof value.content === "string" &&
+    typeof value.source === "string" &&
+    Array.isArray(value.tags) &&
+    value.tags.every((tag) => typeof tag === "string") &&
+    typeof value.createdAt === "string" &&
+    typeof value.effectiveStatus === "string" &&
+    (value.latestAction === null || isLatestInboxReviewAction(value.latestAction))
+  );
+}
+
+function isLatestInboxReviewAction(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.status === "string" &&
+    typeof value.reason === "string" &&
+    typeof value.createdAt === "string"
   );
 }
 

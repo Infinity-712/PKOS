@@ -218,10 +218,14 @@ function summarizePayload(type: string, payload: Record<string, unknown>): Recor
       toolName: stringValue(payload.toolName),
       status: stringValue(payload.status),
       operation: stringValue(payload.operation) ?? stringValue(inputSummary.operation) ?? stringValue(outputSummary.operation),
+      inboxId: stringValue(payload.inboxId) ?? stringValue(inputSummary.inboxId),
+      desiredStatus: stringValue(payload.desiredStatus) ?? stringValue(inputSummary.desiredStatus),
       contentChars: numberValue(payload.contentChars) ?? numberValue(inputSummary.contentChars) ?? numberValue(inputSummary.contentLength),
       noteChars: numberValue(payload.noteChars) ?? numberValue(inputSummary.noteChars) ?? numberValue(inputSummary.noteLength),
+      reasonChars: numberValue(payload.reasonChars) ?? numberValue(inputSummary.reasonChars) ?? numberValue(inputSummary.reasonLength),
       contentSha256: stringValue(payload.contentSha256) ?? stringValue(inputSummary.contentSha256),
       noteSha256: stringValue(payload.noteSha256) ?? stringValue(inputSummary.noteSha256),
+      reasonSha256: stringValue(payload.reasonSha256) ?? stringValue(inputSummary.reasonSha256),
       errorCode: errorCode(payload) ?? stringValue(error.code),
     });
   }

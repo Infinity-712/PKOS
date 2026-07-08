@@ -1,6 +1,6 @@
 import type { ActionSubmitResponse, JsonObject } from "../../types.js";
 
-export type CaptureActionName = "inbox-append" | "state-append";
+export type CaptureActionName = "inbox-append" | "state-append" | "inbox-review-archive" | "inbox-review-restore";
 
 export type ActionAttemptStatus =
   | "draft"
@@ -91,13 +91,29 @@ export function isSuccessfulAttempt(status: ActionAttemptStatus): boolean {
 }
 
 function freezeDraftPayload(draft: ActionDraft, requestId: string): FrozenActionPayload {
-  const endpoint = draft.actionName === "inbox-append" ? "/api/actions/inbox-append" : "/api/actions/state-append";
+  const endpoint = endpointForAction(draft);
   return {
     actionName: draft.actionName,
     endpoint,
     requestId,
     body: { ...draft.body, requestId },
   };
+}
+
+function endpointForAction(draft: ActionDraft): string {
+  if (draft.actionName === "inbox-append") {
+    return "/api/actions/inbox-append";
+  }
+  if (draft.actionName === "state-append") {
+    return "/api/actions/state-append";
+  }
+  if (draft.actionName === "inbox-review-archive" && typeof draft.body.itemId === "string") {
+    return `/api/pkos/inbox-review/${encodeURIComponent(draft.body.itemId)}/archive`;
+  }
+  if (draft.actionName === "inbox-review-restore" && typeof draft.body.itemId === "string") {
+    return `/api/pkos/inbox-review/${encodeURIComponent(draft.body.itemId)}/restore`;
+  }
+  return "/api/actions/invalid";
 }
 
 function statusFromSubmitResponse(response: ActionSubmitResponse): ActionAttemptStatus {

@@ -1,4 +1,5 @@
 import { inboxAppendTool } from "./builtin/inboxAppend.js";
+import { inboxReviewArchiveTool, inboxReviewRestoreTool } from "./builtin/inboxReview.js";
 import { stateAppendTool } from "./builtin/stateAppend.js";
 import type { RegisteredToolDefinition, ToolDefinition, ToolDescriptor } from "./ToolTypes.js";
 
@@ -32,6 +33,8 @@ export class ToolRegistry {
 export function createDefaultToolRegistry(): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(inboxAppendTool);
+  registry.register(inboxReviewArchiveTool);
+  registry.register(inboxReviewRestoreTool);
   registry.register(stateAppendTool);
   return registry;
 }

@@ -90,3 +90,25 @@ export type AuditEventsResponse = {
   items: AuditEventView[];
   nextBefore: string | null;
 };
+
+export type InboxReviewItem = {
+  id: string;
+  captureType: string;
+  content: string;
+  source: string;
+  tags: string[];
+  createdAt: string;
+  effectiveStatus: string;
+  latestAction: {
+    status: string;
+    reason: string;
+    createdAt: string;
+  } | null;
+};
+
+export type InboxReviewListResponse = {
+  items: InboxReviewItem[];
+  count: number;
+  generatedAt: string;
+  filters: JsonObject;
+};

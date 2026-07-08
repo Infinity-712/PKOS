@@ -5,6 +5,7 @@ import { handleAuditRoutes } from "../audit/AuditRoutes.js";
 import { ContextBuilder } from "../context/ContextBuilder.js";
 import { openAgentDatabase, type AgentDatabase } from "../db/connection.js";
 import { EventStore } from "../events/EventStore.js";
+import { handleInboxReviewRoutes } from "../pkos/InboxReviewRoutes.js";
 import { GenerationManager } from "../runtime/GenerationManager.js";
 import { AgentRunner } from "../runtime/AgentRunner.js";
 import { ToolExecutor } from "../tools/ToolExecutor.js";
@@ -38,6 +39,10 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       }
 
       if (await handleActionRoutes(req, res, { db, registry, executor: toolExecutor, events })) {
+        return;
+      }
+
+      if (await handleInboxReviewRoutes(req, res)) {
         return;
       }
 

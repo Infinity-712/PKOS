@@ -10,6 +10,13 @@ import {
   startOrReuseAttempt,
   type ActionDraft,
 } from "../features/actions/requestAttempt.js";
+import {
+  buildInboxReviewQuery,
+  canSubmitInboxReviewAction,
+  createInboxReviewActionDraft,
+  inboxReviewMutationForItem,
+  startOrReuseInboxReviewAttempt,
+} from "../features/inbox-review/inboxReviewModel.js";
 import { isActionRequestListResponse, isAuditEventsResponse, isHealthResponse } from "../lib/guards.js";
 
 const draft: ActionDraft = {
@@ -72,6 +79,37 @@ const replayed = applySubmitResponse(retry, {
 });
 assert(replayed.status === "replayed", "replayed response was not represented");
 assert(resetAttempt().status === "draft", "reset did not return draft state");
+
+const reviewQuery = buildInboxReviewQuery({ status: "archived", source: "moonlolo", tag: "alpha", limit: "20" });
+assert(reviewQuery === "status=archived&source=moonlolo&tag=alpha&limit=20", "inbox review query builder failed");
+
+const archiveDraft = createInboxReviewActionDraft({
+  itemId: "inbox.review.1",
+  action: "archive",
+  reason: "reviewed",
+  confirmed: true,
+});
+const archiveAttempt = startOrReuseInboxReviewAttempt(EMPTY_ATTEMPT, archiveDraft, () => "review-request-1");
+assert(archiveAttempt.requestId === "review-request-1", "inbox review archive did not create requestId");
+assert(archiveAttempt.frozenPayload?.endpoint === "/api/pkos/inbox-review/inbox.review.1/archive", "archive endpoint was not fixed");
+
+const retryArchive = startOrReuseInboxReviewAttempt(
+  archiveAttempt,
+  createInboxReviewActionDraft({
+    itemId: "inbox.review.1",
+    action: "archive",
+    reason: "edited reason must not replace frozen payload",
+    confirmed: true,
+  }),
+  () => "review-request-2",
+);
+assert(retryArchive.requestId === "review-request-1", "inbox review retry changed requestId");
+assert(retryArchive.frozenPayload?.body.reason === "reviewed", "inbox review retry changed frozen reason");
+
+const newArchive = startOrReuseInboxReviewAttempt(resetAttempt(), archiveDraft, () => "review-request-3");
+assert(newArchive.requestId === "review-request-3", "new inbox review request did not create a fresh requestId");
+assert(!canSubmitInboxReviewAction({ itemId: "inbox.review.1", action: "archive", reason: "reviewed", confirmed: false }), "unconfirmed action was submittable");
+assert(inboxReviewMutationForItem({ id: "inbox.review.2", effectiveStatus: "converted" }) === null, "converted item exposed a mutation action");
 
 assert(isHealthResponse({ ok: true, service: "pkos-agent-server", mode: "dry-run" }), "health guard failed");
 assert(

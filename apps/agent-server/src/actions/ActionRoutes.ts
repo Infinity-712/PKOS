@@ -22,15 +22,17 @@ type ActionRouteDeps = {
 type ActionConfig = {
   actionName: string;
   toolName: string;
-  pathname: string;
+  pathname?: string;
+  match?: (pathname: string) => Record<string, string> | null;
   allowedFields: Set<string>;
-  normalize(input: Record<string, unknown>): ActionRequest;
+  normalize(input: Record<string, unknown>, routeParams: Record<string, string>): ActionRequest;
 };
 
 type ActionRequest = {
   requestId: string;
   sessionId?: string;
   sourceMessageId?: string;
+  confirmed?: boolean;
   toolInput: Record<string, unknown>;
 };
 
@@ -41,6 +43,7 @@ type ActionPrepared = {
   sourceMessageId?: string;
   validatedInput: unknown;
   payloadSha256: string;
+  confirmed: boolean;
 };
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -62,6 +65,20 @@ const ACTIONS: ActionConfig[] = [
     pathname: "/api/actions/inbox-append",
     allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "captureType", "content", "source", "status", "tags", "metadata"]),
     normalize: normalizeInboxAppend,
+  },
+  {
+    actionName: "pkos.inbox_review.archive",
+    toolName: "pkos.inbox_review.archive",
+    match: matchInboxReviewArchive,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "reason", "confirmed"]),
+    normalize: normalizeInboxReviewAction,
+  },
+  {
+    actionName: "pkos.inbox_review.restore",
+    toolName: "pkos.inbox_review.restore",
+    match: matchInboxReviewRestore,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "reason", "confirmed"]),
+    normalize: normalizeInboxReviewAction,
   },
   {
     actionName: "state-append",
@@ -136,10 +153,11 @@ export async function handleActionRoutes(req: IncomingMessage, res: ServerRespon
     }
   }
 
-  const config = ACTIONS.find((item) => item.pathname === url.pathname);
-  if (!config) {
+  const matched = matchActionConfig(url.pathname);
+  if (!matched) {
     return false;
   }
+  const { config, routeParams } = matched;
 
   if (req.method !== "POST") {
     sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "route not found" } });
@@ -149,7 +167,7 @@ export async function handleActionRoutes(req: IncomingMessage, res: ServerRespon
   let prepared: ActionPrepared;
   try {
     const body = await readJsonObject(req);
-    prepared = prepareAction(config, body, deps.registry);
+    prepared = prepareAction(config, body, routeParams, deps.registry);
   } catch (error) {
     const payload = errorPayload(error);
     sendJson(res, 400, { ok: false, error: payload });
@@ -221,7 +239,7 @@ export async function handleActionRoutes(req: IncomingMessage, res: ServerRespon
     sessionId: prepared.sessionId,
     sourceMessageId: prepared.sourceMessageId,
     requestedBy: "user_explicit",
-    confirmed: true,
+    confirmed: prepared.confirmed,
   };
   const { toolCallId, result } = await deps.executor.executeWithAudit(config.toolName, prepared.validatedInput, context);
   store.finish(prepared.requestId, toolCallId, result);
@@ -260,14 +278,27 @@ function normalizeResolution(requestId: string, input: Record<string, unknown>):
   };
 }
 
-function prepareAction(config: ActionConfig, body: Record<string, unknown>, registry: ToolRegistry): ActionPrepared {
+function matchActionConfig(pathname: string): { config: ActionConfig; routeParams: Record<string, string> } | null {
+  for (const config of ACTIONS) {
+    if (config.pathname === pathname) {
+      return { config, routeParams: {} };
+    }
+    const routeParams = config.match?.(pathname);
+    if (routeParams) {
+      return { config, routeParams };
+    }
+  }
+  return null;
+}
+
+function prepareAction(config: ActionConfig, body: Record<string, unknown>, routeParams: Record<string, string>, registry: ToolRegistry): ActionPrepared {
   assertNoForbiddenKeys(body);
   for (const key of Object.keys(body)) {
     if (!config.allowedFields.has(key)) {
       throw new ActionInputError("invalid_input", `field is not allowed for ${config.actionName}: ${key}`);
     }
   }
-  const normalized = config.normalize(body);
+  const normalized = config.normalize(body, routeParams);
   const tool = registry.get(config.toolName);
   if (!tool) {
     throw new ActionInputError("unknown_tool", `configured tool is missing: ${config.toolName}`);
@@ -286,6 +317,7 @@ function prepareAction(config: ActionConfig, body: Record<string, unknown>, regi
     sourceMessageId: normalized.sourceMessageId,
     validatedInput,
     payloadSha256,
+    confirmed: normalized.confirmed ?? true,
   };
 }
 
@@ -315,6 +347,17 @@ function normalizeStateAppend(input: Record<string, unknown>): ActionRequest {
       risk: normalizeRisk(input.risk),
       source: input.source,
       note: limitedString(input.note, "note", { required: false, maxChars: MAX_NOTE_CHARS }),
+    },
+  };
+}
+
+function normalizeInboxReviewAction(input: Record<string, unknown>, routeParams: Record<string, string>): ActionRequest {
+  return {
+    ...normalizeBase(input),
+    confirmed: input.confirmed === true,
+    toolInput: {
+      inboxId: routeParams.inboxId,
+      reason: limitedString(input.reason, "reason", { required: true, maxChars: 4096 }),
     },
   };
 }
@@ -545,4 +588,14 @@ class ActionInputError extends Error {
     super(message);
     this.name = "ActionInputError";
   }
+}
+
+function matchInboxReviewArchive(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/inbox-review\/([^/]+)\/archive$/.exec(pathname);
+  return match ? { inboxId: decodeURIComponent(match[1]) } : null;
+}
+
+function matchInboxReviewRestore(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/inbox-review\/([^/]+)\/restore$/.exec(pathname);
+  return match ? { inboxId: decodeURIComponent(match[1]) } : null;
 }

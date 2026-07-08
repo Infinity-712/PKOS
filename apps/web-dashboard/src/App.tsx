@@ -3,13 +3,15 @@ import { useState } from "react";
 import { ActionRequestsPage } from "./pages/ActionRequestsPage.js";
 import { AuditPage } from "./pages/AuditPage.js";
 import { CapturePage } from "./pages/CapturePage.js";
+import { InboxReviewPage } from "./pages/InboxReviewPage.js";
 import { OverviewPage } from "./pages/OverviewPage.js";
 
-type TabId = "overview" | "capture" | "actions" | "audit";
+type TabId = "overview" | "capture" | "inboxReview" | "actions" | "audit";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "capture", label: "Capture" },
+  { id: "inboxReview", label: "Inbox Review" },
   { id: "actions", label: "Action Requests" },
   { id: "audit", label: "Audit" },
 ];
@@ -37,6 +39,7 @@ export function App() {
 
       {tab === "overview" ? <OverviewPage /> : null}
       {tab === "capture" ? <CapturePage /> : null}
+      {tab === "inboxReview" ? <InboxReviewPage /> : null}
       {tab === "actions" ? <ActionRequestsPage /> : null}
       {tab === "audit" ? <AuditPage /> : null}
     </main>

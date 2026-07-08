@@ -53,6 +53,7 @@ npm run writeback-smoke
 npm run action-api-smoke
 npm run action-recovery-smoke
 npm run audit-api-smoke
+npm run inbox-review-api-smoke
 npm run dev
 ```
 
@@ -67,6 +68,8 @@ npm run dev
 `npm run action-recovery-smoke` verifies stale running detection, indeterminate outcomes, human resolution, append-only resolution audit, concurrent resolution safety, and migration from version 2 to version 3.
 
 `npm run audit-api-smoke` verifies the read-only Audit API, filters, pagination, invalid query handling, and payload summary redaction.
+
+`npm run inbox-review-api-smoke` verifies the fixed Inbox Review API against a temporary `PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI.
 
 ## SQLite Migrations
 
@@ -118,6 +121,8 @@ Permission levels:
 Current registered tools:
 
 - `pkos.inbox.append`: `L1`, side-effecting, no confirmation required for explicit append calls;
+- `pkos.inbox_review.archive`: `L2`, side-effecting, explicit user confirmation required;
+- `pkos.inbox_review.restore`: `L2`, side-effecting, explicit user confirmation required;
 - `pkos.state.append`: `L1`, side-effecting, no confirmation required for explicit append calls.
 
 `ToolRegistry` is static code registration. It does not dynamically load modules or commands from strings.
@@ -125,6 +130,8 @@ Current registered tools:
 `WritebackRouter` currently allows only:
 
 - `pkos.inbox.append`;
+- `pkos.inbox_review.archive`;
+- `pkos.inbox_review.restore`;
 - `pkos.state.append`.
 
 It blocks unknown tools, trusted/object/task/governance writes, deletes, arbitrary file writes, and arbitrary command execution. The router distinguishes `unknown_tool`, `invalid_input`, `permission_denied`, `confirmation_required`, `cli_failed`, `timeout`, and `written` outcomes.
@@ -133,12 +140,16 @@ Node does not write `inbox/items.jsonl` or `state/snapshots.jsonl` directly. The
 
 ```bash
 python -B -m tools.pkos inbox-append --json
+python -B -m tools.pkos inbox-review mark --id <id> --status archived --reason "..."
+python -B -m tools.pkos inbox-review mark --id <id> --status unprocessed --reason "..."
 python -B -m tools.pkos state-append --json
 ```
 
 The CLI process runner uses fixed argument arrays with `shell: false`, runs from `PKOS_CORE_ROOT`, forwards only a small environment allowlist plus `PKOS_CORE_ROOT` and `PKOS_DATA_ROOT`, and caps stdout/stderr at 64 KiB with a 10 second default timeout.
 
 Audit data is minimized. `tool_calls` and `agent_events` record operation, enums, tags, source references, content/note length, and SHA-256 hashes. They do not duplicate full inbox content or state notes.
+
+Inbox Review archive/restore records only `inboxId`, desired effective status, reason length, reason SHA-256, request id, sanitized result, and sanitized error code in SQLite audit/runtime tables. The full review reason is allowed only in the existing Python authority action log when the CLI appends `review/logs/inbox_review_actions.jsonl`.
 
 ## Fixed Action API
 
@@ -147,6 +158,8 @@ The Action API is for explicit future Web/Electron user actions. It is not Agent
 Endpoints:
 
 - `POST /api/actions/inbox-append` maps only to `pkos.inbox.append`;
+- `POST /api/pkos/inbox-review/:id/archive` maps only to `pkos.inbox_review.archive`;
+- `POST /api/pkos/inbox-review/:id/restore` maps only to `pkos.inbox_review.restore`;
 - `POST /api/actions/state-append` maps only to `pkos.state.append`.
 
 Clients cannot provide a tool name, executable, module, CLI subcommand, or file path. Unknown body fields are rejected, including override attempts such as `toolName`, `command`, or `executable`.
@@ -182,6 +195,10 @@ HTTP status mapping:
 The API never returns raw stderr, environment variables, internal command paths, vault record full text, or secrets.
 
 `action_requests` stores `request_id`, action name, payload hash, status, optional `tool_call_id`, and sanitized result/error JSON. It does not store full inbox content or full state notes.
+
+For Inbox Review archive/restore, the stable payload hash includes the fixed action name, `inboxId`, and normalized reason. Replays do not call Python again. Stale running requests become `request_indeterminate` and must be handled through the existing human resolution flow.
+
+Converted Inbox Review state is read-only in this sprint. The server does not expose a converted endpoint, generic mark endpoint, or generic tool execution endpoint.
 
 ## Action Recovery
 
@@ -221,6 +238,9 @@ Resolution never calls `ToolExecutor`, never runs Python, never writes the PKOS 
 - `GET /api/context/:sessionId`
 - `POST /api/actions/inbox-append`
 - `POST /api/actions/state-append`
+- `GET /api/pkos/inbox-review`
+- `POST /api/pkos/inbox-review/:id/archive`
+- `POST /api/pkos/inbox-review/:id/restore`
 - `GET /api/actions/requests`
 - `GET /api/actions/requests/:requestId`
 - `POST /api/actions/requests/:requestId/resolve`
@@ -245,6 +265,8 @@ The fixed Action API is not wired into `POST /api/chat/send`.
 
 `GET /api/audit/events` is read-only and returns sanitized event summaries for the local dashboard. Supported query parameters are `type`, `severity`, `sessionId`, `generationId`, `limit`, and `before`. The default limit is 50 and the maximum is 200. The route never returns raw `payload_json`, full message text, full context items, capture content, state notes, raw reason text, stderr, command paths, or secrets.
 
+`GET /api/pkos/inbox-review` is read-only and calls `python -B -m tools.pkos inbox-review list --json`. Supported query parameters are `status`, `source`, `tag`, and `limit`. The default limit is 50 and the maximum is 200. The response is explicitly normalized for the local dashboard. It may include inbox content for human review, but that content is not copied into `agent_events`, `tool_calls`, `action_requests`, or browser persistence.
+
 ## Web Dashboard
 
 The companion dashboard lives in `apps/web-dashboard`. In development, run the Agent Server and the dashboard in two terminals:
@@ -261,7 +283,7 @@ npm run dev
 
 Open `http://127.0.0.1:5173`. Vite proxies `/api` and `/health` to `http://127.0.0.1:8790`.
 
-The dashboard is a local human operations surface for health, fixed capture actions, indeterminate action recovery, and audit viewing. It is not PKOS authority and does not add write permissions, generic tool execution, Agent tool selection, task management, reminders, RAG, memory, OpenClaw, WeChat, or production hosting.
+The dashboard is a local human operations surface for health, fixed capture actions, Inbox Review archive/restore, indeterminate action recovery, and audit viewing. It is not PKOS authority and does not add write permissions, generic tool execution, Agent tool selection, task management, reminders, RAG, memory, OpenClaw, WeChat, or production hosting.
 
 ## PKOS Authority Boundary
 
@@ -271,4 +293,4 @@ Context is runtime-derived input, not authority. It may guide a generation, but 
 
 This skeleton writes only the Agent Runtime SQLite database under `runtime/agent/`. It does not write `objects/`, `trusted`, formal tasks, governance docs, Moonlolo/OpenClaw files, or PKOS Python core behavior.
 
-The only authority data writes reachable from the internal tool layer are append-only `inbox/items.jsonl` and `state/snapshots.jsonl` writes performed by the Python PKOS CLI. The runtime does not create objects, tasks, trusted migrations, reminder schedules, or long-term diagnoses.
+The only authority data writes reachable from the internal tool layer are append-only `inbox/items.jsonl`, `state/snapshots.jsonl`, and Inbox Review action log writes performed by the Python PKOS CLI. Node never edits existing inbox captures or appends review actions directly. The runtime does not create objects, tasks, trusted migrations, converted targets, reminder schedules, or long-term diagnoses.

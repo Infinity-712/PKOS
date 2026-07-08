@@ -14,6 +14,7 @@
   "include": [
     "src/scripts/smoke.ts",
     "src/features/actions/requestAttempt.ts",
+    "src/features/inbox-review/inboxReviewModel.ts",
     "src/lib/guards.ts",
     "src/types.ts"
   ]

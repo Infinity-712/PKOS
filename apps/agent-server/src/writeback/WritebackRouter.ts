@@ -1,10 +1,16 @@
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
+import type { InboxReviewMarkInput } from "../tools/builtin/inboxReview.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
 import type { RegisteredToolDefinition, ToolExecutionContext } from "../tools/ToolTypes.js";
 import { PkosCliClient } from "./PkosCliClient.js";
 import { blockedResult, type WritebackResult } from "./WritebackTypes.js";
 
-const DIRECT_WRITE_TOOLS = new Set(["pkos.inbox.append", "pkos.state.append"]);
+const DIRECT_WRITE_TOOLS = new Set([
+  "pkos.inbox.append",
+  "pkos.inbox_review.archive",
+  "pkos.inbox_review.restore",
+  "pkos.state.append",
+]);
 
 export class WritebackRouter {
   constructor(private readonly cli: PkosCliClient = new PkosCliClient()) {}
@@ -27,6 +33,12 @@ export class WritebackRouter {
 
     if (tool.name === "pkos.inbox.append") {
       return this.cli.inboxAppend(input as InboxAppendInput);
+    }
+    if (tool.name === "pkos.inbox_review.archive") {
+      return this.cli.inboxReviewArchive(input as InboxReviewMarkInput);
+    }
+    if (tool.name === "pkos.inbox_review.restore") {
+      return this.cli.inboxReviewRestore(input as InboxReviewMarkInput);
     }
     if (tool.name === "pkos.state.append") {
       return this.cli.stateAppend(input as StateAppendInput);
@@ -63,6 +75,9 @@ export class WritebackRouter {
         errorCode: "confirmation_required",
         message: "Tool requires explicit confirmation",
       });
+    }
+    if (tool.permissionLevel === "L2" && context.requestedBy === "user_explicit") {
+      return null;
     }
     if (tool.permissionLevel !== "L1") {
       return blockedResult({
