@@ -1,0 +1,305 @@
+:root {
+  color: #17201b;
+  background: #f5f7f4;
+  font-family:
+    Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans SC", sans-serif;
+  line-height: 1.45;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  border: 1px solid #9aa79d;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #17201b;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+button.active {
+  border-color: #386b56;
+  background: #e5f2ec;
+}
+
+button:disabled {
+  color: #79837c;
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #aeb7b1;
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: #ffffff;
+  color: #17201b;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.app-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid #c9d1ca;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px 18px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.topbar p {
+  margin: 6px 0 0;
+  color: #445049;
+}
+
+.build-marker {
+  white-space: nowrap;
+  color: #445049;
+  font-size: 13px;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.page-grid,
+.split-page {
+  display: grid;
+  gap: 14px;
+}
+
+.page-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.page-grid.two-column,
+.split-page {
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr);
+}
+
+.panel {
+  border: 1px solid #c9d1ca;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+  min-width: 0;
+}
+
+.panel h2,
+.panel h3 {
+  margin: 0 0 12px;
+}
+
+.panel-heading,
+.filter-row,
+.attempt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.filter-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.filter-row label {
+  min-width: 160px;
+}
+
+.form-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.compact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.inline-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.inline-checks label,
+.checkbox-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-checks input,
+.checkbox-line input {
+  width: auto;
+}
+
+.kv-list {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.kv-list.compact {
+  grid-template-columns: 110px minmax(0, 1fr);
+  font-size: 13px;
+}
+
+.kv-list dt {
+  color: #526058;
+}
+
+.kv-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.muted {
+  color: #667169;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 9px;
+  background: #ecefec;
+  color: #28332d;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.badge.good {
+  background: #dff1e5;
+  color: #1f6237;
+}
+
+.badge.warn {
+  background: #fff1c9;
+  color: #7b5900;
+}
+
+.badge.bad {
+  background: #f9d8d8;
+  color: #8b2424;
+}
+
+.notice {
+  border-left: 3px solid #b98900;
+  background: #fff8e6;
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  color: #584000;
+}
+
+.attempt-box,
+.resolution-form {
+  border-top: 1px solid #dde3df;
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.resolution-form {
+  display: grid;
+  gap: 10px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+th,
+td {
+  border-bottom: 1px solid #e4e9e5;
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+th {
+  color: #46534b;
+  font-weight: 600;
+}
+
+tr:hover td {
+  background: #f7faf8;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #1e5c92;
+  padding: 0;
+}
+
+@media (max-width: 900px) {
+  .topbar,
+  .panel-heading,
+  .attempt-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page-grid,
+  .page-grid.two-column,
+  .split-page,
+  .compact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kv-list,
+  .kv-list.compact {
+    grid-template-columns: 1fr;
+  }
+}
