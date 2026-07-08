@@ -38,6 +38,36 @@ export type InboxReviewCliListResult =
   | { ok: true; items: InboxReviewCliItem[]; count: number; generatedAt: string }
   | { ok: false; errorCode: string; message: string };
 
+export type StateTimelineFilters = {
+  energy?: string;
+  mood?: string;
+  mode?: string;
+  limit?: number;
+};
+
+export type StateTimelineCliItem = {
+  id: string;
+  source: string;
+  energy: string;
+  mood: string;
+  body: string;
+  context: string;
+  mode: string;
+  risk: Record<string, string>;
+  note: string | null;
+  created_at: string;
+};
+
+export type StateTimelineCliResult =
+  | {
+      ok: true;
+      current: StateTimelineCliItem | null;
+      items: StateTimelineCliItem[];
+      count: number;
+      filters: Record<string, unknown>;
+    }
+  | { ok: false; errorCode: string; message: string };
+
 const MAX_OUTPUT_BYTES = 64 * 1024;
 
 export class PkosCliClient {
@@ -153,6 +183,45 @@ export class PkosCliClient {
       generatedAt: typeof payload.generated_at === "string" ? payload.generated_at : "",
       count: typeof payload.count === "number" ? payload.count : 0,
       items: normalizeInboxReviewCliItems(payload.items),
+    };
+  }
+
+  async stateTimeline(filters: StateTimelineFilters): Promise<StateTimelineCliResult> {
+    const args = ["-B", "-m", "tools.pkos", "state-list", "--json"];
+    if (filters.energy) {
+      args.push("--energy", filters.energy);
+    }
+    if (filters.mood) {
+      args.push("--mood", filters.mood);
+    }
+    if (filters.mode) {
+      args.push("--mode", filters.mode);
+    }
+    if (filters.limit !== undefined) {
+      args.push("--limit", String(filters.limit));
+    }
+
+    const result = await this.runRawCommand(args);
+    if (result.error) {
+      return result.error;
+    }
+    const payload = parseCliJson("pkos.state.timeline", result.result);
+    if (!payload) {
+      return { ok: false, errorCode: "cli_failed", message: "PKOS CLI returned invalid JSON" };
+    }
+    if (payload.ok === false) {
+      return {
+        ok: false,
+        errorCode: cliErrorCode(payload),
+        message: "PKOS CLI rejected state timeline query",
+      };
+    }
+    return {
+      ok: true,
+      current: isRecord(payload.current) ? normalizeStateTimelineCliItem(payload.current) : null,
+      items: normalizeStateTimelineCliItems(payload.items),
+      count: typeof payload.count === "number" ? payload.count : 0,
+      filters: isRecord(payload.filters) ? payload.filters : {},
     };
   }
 
@@ -288,6 +357,41 @@ function normalizeInboxReviewCliItems(value: unknown): InboxReviewCliItem[] {
     reviewed_at: stringValue(item.reviewed_at),
     review_reason: stringValue(item.review_reason),
   }));
+}
+
+function normalizeStateTimelineCliItems(value: unknown): StateTimelineCliItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isRecord).map(normalizeStateTimelineCliItem);
+}
+
+function normalizeStateTimelineCliItem(item: Record<string, unknown>): StateTimelineCliItem {
+  return {
+    id: stringValue(item.id),
+    source: stringValue(item.source),
+    energy: stringValue(item.energy),
+    mood: stringValue(item.mood),
+    body: stringValue(item.body),
+    context: stringValue(item.context),
+    mode: stringValue(item.mode),
+    risk: normalizeRisk(item.risk),
+    note: typeof item.note === "string" ? item.note : null,
+    created_at: stringValue(item.created_at),
+  };
+}
+
+function normalizeRisk(value: unknown): Record<string, string> {
+  if (!isRecord(value)) {
+    return {};
+  }
+  const result: Record<string, string> = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (typeof child === "string") {
+      result[key] = child;
+    }
+  }
+  return result;
 }
 
 function stringValue(value: unknown): string {

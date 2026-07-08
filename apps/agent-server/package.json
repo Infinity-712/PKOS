@@ -12,7 +12,8 @@
     "action-api-smoke": "tsx src/scripts/actionApiSmoke.ts",
     "action-recovery-smoke": "tsx src/scripts/actionRecoverySmoke.ts",
     "audit-api-smoke": "tsx src/scripts/auditApiSmoke.ts",
-    "inbox-review-api-smoke": "tsx src/scripts/inboxReviewApiSmoke.ts"
+    "inbox-review-api-smoke": "tsx src/scripts/inboxReviewApiSmoke.ts",
+    "state-timeline-api-smoke": "tsx src/scripts/stateTimelineApiSmoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

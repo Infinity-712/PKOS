@@ -75,6 +75,7 @@ python -m tools.pkos gen-queue
 python -m tools.pkos gen-digest --week 2026-W07
 python -m tools.pkos inbox-append --capture-type note --content "..."
 python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
+python -m tools.pkos state-list --json
 python -m tools.pkos gen-flow
 python -m tools.pkos export-agent-context
 python -m tools.pkos export-site-data
@@ -88,6 +89,8 @@ python -m tools.pkos export-site-data
 - `state/snapshots.jsonl`
 
 当前 public-core 方向下，真实 `.jsonl` 默认被 Git 忽略。未来 private vault 可以选择追踪这些本地日志。
+
+`state-list --json` 是只读状态时间线查询：默认返回最新 50 条，`current` 始终来自未应用过滤条件时的最新显式状态快照，不编辑或覆盖历史记录。
 
 服务器部署示例：
 

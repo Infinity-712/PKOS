@@ -10,6 +10,7 @@ import type {
   HealthResponse,
   InboxReviewListResponse,
   JsonObject,
+  StateTimelineResponse,
   WritebackResult,
 } from "../types.js";
 
@@ -76,6 +77,17 @@ export function isInboxReviewListResponse(value: unknown): value is InboxReviewL
     value.items.every(isInboxReviewItem) &&
     typeof value.count === "number" &&
     typeof value.generatedAt === "string" &&
+    isRecord(value.filters)
+  );
+}
+
+export function isStateTimelineResponse(value: unknown): value is StateTimelineResponse {
+  return (
+    isRecord(value) &&
+    (value.current === null || isStateTimelineItem(value.current)) &&
+    Array.isArray(value.items) &&
+    value.items.every(isStateTimelineItem) &&
+    typeof value.count === "number" &&
     isRecord(value.filters)
   );
 }
@@ -149,6 +161,23 @@ function isLatestInboxReviewAction(value: unknown): boolean {
     typeof value.status === "string" &&
     typeof value.reason === "string" &&
     typeof value.createdAt === "string"
+  );
+}
+
+function isStateTimelineItem(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.source === "string" &&
+    typeof value.energy === "string" &&
+    typeof value.mood === "string" &&
+    typeof value.body === "string" &&
+    typeof value.context === "string" &&
+    typeof value.mode === "string" &&
+    isRecord(value.risk) &&
+    (value.note === null || typeof value.note === "string") &&
+    typeof value.createdAt === "string" &&
+    typeof value.stale === "boolean"
   );
 }
 

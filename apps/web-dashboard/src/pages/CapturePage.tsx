@@ -28,15 +28,15 @@ type StateDraft = {
   context: string;
   mode: string;
   note: string;
-  riskShortVideo: boolean;
-  riskRumination: boolean;
-  riskOverload: boolean;
+  riskShortVideo: string;
+  riskRumination: string;
+  riskOverload: string;
 };
 
 const DEFAULT_INBOX: InboxDraft = {
   captureType: "note",
   content: "",
-  source: "web-dashboard",
+  source: "web",
   tags: "",
 };
 
@@ -45,12 +45,19 @@ const DEFAULT_STATE: StateDraft = {
   mood: "unknown",
   body: "unknown",
   context: "unknown",
-  mode: "normal",
+  mode: "unknown",
   note: "",
-  riskShortVideo: false,
-  riskRumination: false,
-  riskOverload: false,
+  riskShortVideo: "unknown",
+  riskRumination: "unknown",
+  riskOverload: "unknown",
 };
+
+const ENERGY_OPTIONS = ["unknown", "very_low", "low", "medium", "high", "overloaded"];
+const MOOD_OPTIONS = ["unknown", "calm", "anxious", "low", "excited", "numb", "irritated", "overloaded"];
+const BODY_OPTIONS = ["unknown", "normal", "sleepy", "tired", "chest_tight", "headache", "hungry", "sick"];
+const CONTEXT_OPTIONS = ["unknown", "dorm", "classroom", "library", "outside", "home", "before_sleep", "travel", "other"];
+const MODE_OPTIONS = ["unknown", "study", "writing", "recovery", "social", "quiet", "life", "project", "other"];
+const RISK_OPTIONS = ["unknown", "low", "medium", "high"];
 
 export function CapturePage() {
   return (
@@ -69,7 +76,7 @@ function InboxCaptureForm() {
     body: {
       captureType: draft.captureType.trim() || "note",
       content: draft.content,
-      source: draft.source.trim() || "web-dashboard",
+      source: draft.source.trim() || "web",
       status: "unprocessed",
       tags: draft.tags
         .split(",")
@@ -103,7 +110,7 @@ function InboxCaptureForm() {
   );
 }
 
-function StateCaptureForm() {
+export function StateCaptureForm(props: { submitLabel?: string; onWritten?: () => void }) {
   const [draft, setDraft] = useState<StateDraft>(DEFAULT_STATE);
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
   const actionDraft: ActionDraft = {
@@ -119,55 +126,103 @@ function StateCaptureForm() {
         rumination: draft.riskRumination,
         overload: draft.riskOverload,
       },
-      source: "web-dashboard",
+      source: "web",
       note: draft.note,
     },
   };
 
   return (
-    <form className="panel form-panel" onSubmit={(event) => void submitAction(event, actionDraft, attempt, setAttempt)}>
+    <form className="panel form-panel" onSubmit={(event) => void submitAction(event, actionDraft, attempt, setAttempt, props.onWritten)}>
       <h2>State append</h2>
       <div className="compact-grid">
         <label>
           energy
-          <input value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value })} />
+          <select value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value })}>
+            {ENERGY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           mood
-          <input value={draft.mood} onChange={(event) => setDraft({ ...draft, mood: event.target.value })} />
+          <select value={draft.mood} onChange={(event) => setDraft({ ...draft, mood: event.target.value })}>
+            {MOOD_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           body
-          <input value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} />
+          <select value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })}>
+            {BODY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           context
-          <input value={draft.context} onChange={(event) => setDraft({ ...draft, context: event.target.value })} />
+          <select value={draft.context} onChange={(event) => setDraft({ ...draft, context: event.target.value })}>
+            {CONTEXT_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       <label>
         mode
-        <input value={draft.mode} onChange={(event) => setDraft({ ...draft, mode: event.target.value })} />
+        <select value={draft.mode} onChange={(event) => setDraft({ ...draft, mode: event.target.value })}>
+          {MODE_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
       </label>
-      <div className="inline-checks">
+      <div className="compact-grid">
         <label>
-          <input type="checkbox" checked={draft.riskShortVideo} onChange={(event) => setDraft({ ...draft, riskShortVideo: event.target.checked })} />
           shortVideo
+          <select value={draft.riskShortVideo} onChange={(event) => setDraft({ ...draft, riskShortVideo: event.target.value })}>
+            {RISK_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          <input type="checkbox" checked={draft.riskRumination} onChange={(event) => setDraft({ ...draft, riskRumination: event.target.checked })} />
           rumination
+          <select value={draft.riskRumination} onChange={(event) => setDraft({ ...draft, riskRumination: event.target.value })}>
+            {RISK_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
-          <input type="checkbox" checked={draft.riskOverload} onChange={(event) => setDraft({ ...draft, riskOverload: event.target.checked })} />
           overload
+          <select value={draft.riskOverload} onChange={(event) => setDraft({ ...draft, riskOverload: event.target.value })}>
+            {RISK_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       <label>
         note
         <textarea rows={4} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} />
       </label>
-      <AttemptControls attempt={attempt} onNew={() => setAttempt(resetAttempt())} />
+      <AttemptControls attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel={props.submitLabel} />
     </form>
   );
 }
@@ -177,6 +232,7 @@ async function submitAction(
   draft: ActionDraft,
   attempt: RequestAttemptState,
   setAttempt: (next: RequestAttemptState) => void,
+  onWritten?: () => void,
 ): Promise<void> {
   event.preventDefault();
   const started = startOrReuseAttempt(attempt, draft, createRequestId);
@@ -186,7 +242,11 @@ async function submitAction(
   }
   try {
     const response = await postJson(started.frozenPayload.endpoint, started.frozenPayload.body, isActionSubmitResponse);
-    setAttempt(applySubmitResponse(started, response));
+    const next = applySubmitResponse(started, response);
+    setAttempt(next);
+    if (isSuccessfulAttempt(next.status)) {
+      onWritten?.();
+    }
   } catch (caught) {
     if (caught instanceof ApiClientError) {
       setAttempt(applySubmitError(started, { code: caught.code, message: caught.message }));
@@ -196,13 +256,13 @@ async function submitAction(
   }
 }
 
-function AttemptControls(props: { attempt: RequestAttemptState; onNew: () => void }) {
+function AttemptControls(props: { attempt: RequestAttemptState; onNew: () => void; submitLabel?: string }) {
   const frozen = props.attempt.frozenPayload;
   return (
     <div className="attempt-box">
       <div className="attempt-row">
         <button type="submit" disabled={props.attempt.status === "submitting"}>
-          {frozen ? "重试同一 requestId" : "提交"}
+          {frozen ? "重试同一 requestId" : props.submitLabel ?? "提交"}
         </button>
         <button type="button" onClick={props.onNew}>
           新建请求

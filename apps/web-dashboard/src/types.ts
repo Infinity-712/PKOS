@@ -112,3 +112,24 @@ export type InboxReviewListResponse = {
   generatedAt: string;
   filters: JsonObject;
 };
+
+export type StateTimelineItem = {
+  id: string;
+  source: string;
+  energy: string;
+  mood: string;
+  body: string;
+  context: string;
+  mode: string;
+  risk: JsonObject;
+  note: string | null;
+  createdAt: string;
+  stale: boolean;
+};
+
+export type StateTimelineResponse = {
+  current: StateTimelineItem | null;
+  items: StateTimelineItem[];
+  count: number;
+  filters: JsonObject;
+};

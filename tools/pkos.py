@@ -9,6 +9,7 @@ Usage:
   python -m tools.pkos inbox-append --capture-type note --content "..."
   python -m tools.pkos inbox-review list [--json]
   python -m tools.pkos inbox-review mark --id <inbox_id> --status archived --reason "reviewed"
+  python -m tools.pkos state-list [--json]
   python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
   python -m tools.pkos paths [--json]
   python -m tools.pkos doctor [--json]
@@ -51,6 +52,7 @@ from tools.flow_hub.flow import (
     run_gen_flow,
     write_json,
 )
+from tools.flow_hub.state_list import StateListError, build_state_list_view
 from tools.inbox_review.review import (
     ALLOWED_STATUSES as INBOX_REVIEW_STATUSES,
     content_excerpt,
@@ -78,6 +80,7 @@ COMMAND_NAMES = {
     "export-agent-context",
     "inbox-append",
     "inbox-review",
+    "state-list",
     "state-append",
     "paths",
     "doctor",
@@ -370,6 +373,14 @@ def main() -> int:
     inbox_review_mark.add_argument("--actions-path", default="review/logs/inbox_review_actions.jsonl")
     inbox_review_mark.add_argument("--runtime-path", default="runtime/inbox_review/current.json")
 
+    state_list_parser = subparsers.add_parser("state-list", help="List append-only Current State snapshots")
+    state_list_parser.add_argument("--limit", type=int, default=None)
+    state_list_parser.add_argument("--energy", default=None)
+    state_list_parser.add_argument("--mood", default=None)
+    state_list_parser.add_argument("--mode", default=None)
+    state_list_parser.add_argument("--state-path", default="state/snapshots.jsonl")
+    state_list_parser.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
     state_parser = subparsers.add_parser("state-append", help="Append a Current State snapshot")
     state_parser.add_argument("--energy", required=True, choices=sorted(ENERGY_VALUES))
     state_parser.add_argument("--mood", required=True, choices=sorted(MOOD_VALUES))
@@ -579,6 +590,31 @@ def main() -> int:
                 if item:
                     print(f"effective_status: {item.get('effective_status')}")
             return 0
+
+    if args.command == "state-list":
+        try:
+            view = build_state_list_view(
+                resolve_data_path(args.state_path),
+                energy=args.energy,
+                mood=args.mood,
+                mode=args.mode,
+                limit=args.limit,
+            )
+        except StateListError as exc:
+            if args.json_output:
+                _print_json(_json_error("INVALID_STATE_LIST", str(exc)))
+                return 2
+            print(f"ERROR: {exc}")
+            return 2
+        if args.json_output:
+            _print_json(view)
+        else:
+            print(f"count: {view['count']}")
+            if view["current"]:
+                print(f"current: {view['current']['created_at']} {view['current']['energy']} {view['current']['mood']}")
+            for item in view["items"]:
+                print(f"{item['created_at']} | {item['energy']} | {item['mood']} | {item['mode']}")
+        return 0
 
     if args.command == "state-append":
         try:

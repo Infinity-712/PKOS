@@ -54,6 +54,7 @@ npm run action-api-smoke
 npm run action-recovery-smoke
 npm run audit-api-smoke
 npm run inbox-review-api-smoke
+npm run state-timeline-api-smoke
 npm run dev
 ```
 
@@ -70,6 +71,8 @@ npm run dev
 `npm run audit-api-smoke` verifies the read-only Audit API, filters, pagination, invalid query handling, and payload summary redaction.
 
 `npm run inbox-review-api-smoke` verifies the fixed Inbox Review API against a temporary `PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI.
+
+`npm run state-timeline-api-smoke` verifies the read-only State Timeline API against a temporary `PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI. It covers empty state, ordering, current/filter semantics, stale display, malformed JSONL failure, append-then-refresh, and audit redaction.
 
 ## SQLite Migrations
 
@@ -143,6 +146,12 @@ python -B -m tools.pkos inbox-append --json
 python -B -m tools.pkos inbox-review mark --id <id> --status archived --reason "..."
 python -B -m tools.pkos inbox-review mark --id <id> --status unprocessed --reason "..."
 python -B -m tools.pkos state-append --json
+```
+
+Node also does not read `state/snapshots.jsonl` directly for dashboard state history. The read-only State Timeline source is:
+
+```bash
+python -B -m tools.pkos state-list --json
 ```
 
 The CLI process runner uses fixed argument arrays with `shell: false`, runs from `PKOS_CORE_ROOT`, forwards only a small environment allowlist plus `PKOS_CORE_ROOT` and `PKOS_DATA_ROOT`, and caps stdout/stderr at 64 KiB with a 10 second default timeout.
@@ -238,6 +247,7 @@ Resolution never calls `ToolExecutor`, never runs Python, never writes the PKOS 
 - `GET /api/context/:sessionId`
 - `POST /api/actions/inbox-append`
 - `POST /api/actions/state-append`
+- `GET /api/pkos/state-timeline`
 - `GET /api/pkos/inbox-review`
 - `POST /api/pkos/inbox-review/:id/archive`
 - `POST /api/pkos/inbox-review/:id/restore`
@@ -267,6 +277,8 @@ The fixed Action API is not wired into `POST /api/chat/send`.
 
 `GET /api/pkos/inbox-review` is read-only and calls `python -B -m tools.pkos inbox-review list --json`. Supported query parameters are `status`, `source`, `tag`, and `limit`. The default limit is 50 and the maximum is 200. The response is explicitly normalized for the local dashboard. It may include inbox content for human review, but that content is not copied into `agent_events`, `tool_calls`, `action_requests`, or browser persistence.
 
+`GET /api/pkos/state-timeline` is read-only and calls `python -B -m tools.pkos state-list --json`. Supported query parameters are `energy`, `mood`, `mode`, and `limit`. The default limit is 50 and the maximum is 200. `current` is always the latest overall explicit state snapshot before filters; `items` may be filtered. The route adds a derived `stale` flag when a snapshot is older than the 24 hour freshness window used by the Agent Context contract. Stale means "possibly outdated", not invalid. The API does not score, diagnose, summarize trends, edit historical snapshots, or write audit events for ordinary reads. Python integrity failures return a structured 500 without raw stderr, tracebacks, paths, environment variables, or state note full text.
+
 ## Web Dashboard
 
 The companion dashboard lives in `apps/web-dashboard`. In development, run the Agent Server and the dashboard in two terminals:
@@ -283,7 +295,7 @@ npm run dev
 
 Open `http://127.0.0.1:5173`. Vite proxies `/api` and `/health` to `http://127.0.0.1:8790`.
 
-The dashboard is a local human operations surface for health, fixed capture actions, Inbox Review archive/restore, indeterminate action recovery, and audit viewing. It is not PKOS authority and does not add write permissions, generic tool execution, Agent tool selection, task management, reminders, RAG, memory, OpenClaw, WeChat, or production hosting.
+The dashboard is a local human operations surface for health, fixed capture actions, State Timeline viewing, Inbox Review archive/restore, indeterminate action recovery, and audit viewing. It is not PKOS authority and does not add write permissions, generic tool execution, Agent tool selection, task management, reminders, RAG, memory, OpenClaw, WeChat, or production hosting.
 
 ## PKOS Authority Boundary
 
@@ -293,4 +305,4 @@ Context is runtime-derived input, not authority. It may guide a generation, but 
 
 This skeleton writes only the Agent Runtime SQLite database under `runtime/agent/`. It does not write `objects/`, `trusted`, formal tasks, governance docs, Moonlolo/OpenClaw files, or PKOS Python core behavior.
 
-The only authority data writes reachable from the internal tool layer are append-only `inbox/items.jsonl`, `state/snapshots.jsonl`, and Inbox Review action log writes performed by the Python PKOS CLI. Node never edits existing inbox captures or appends review actions directly. The runtime does not create objects, tasks, trusted migrations, converted targets, reminder schedules, or long-term diagnoses.
+The only authority data writes reachable from the internal tool layer are append-only `inbox/items.jsonl`, `state/snapshots.jsonl`, and Inbox Review action log writes performed by the Python PKOS CLI. Node never edits existing inbox captures, historical state snapshots, or review actions directly. The runtime does not create objects, tasks, trusted migrations, converted targets, reminder schedules, or diagnoses.
