@@ -11,6 +11,11 @@ import { ToolRegistry } from "./ToolRegistry.js";
 
 type ToolCallStatus = "running" | "completed" | "failed" | "blocked";
 
+export type ToolExecutionRecord = {
+  toolCallId: string;
+  result: WritebackResult;
+};
+
 export class ToolExecutor {
   constructor(
     private readonly db: AgentDatabase,
@@ -20,6 +25,10 @@ export class ToolExecutor {
   ) {}
 
   async execute(toolName: string, input: unknown, context: ToolExecutionContext): Promise<WritebackResult> {
+    return (await this.executeWithAudit(toolName, input, context)).result;
+  }
+
+  async executeWithAudit(toolName: string, input: unknown, context: ToolExecutionContext): Promise<ToolExecutionRecord> {
     const toolCallId = this.createToolCall(toolName, context);
     this.recordEvent("tool_call_started", context, {
       toolCallId,
@@ -33,7 +42,7 @@ export class ToolExecutor {
       const result = this.router.unknownTool(toolName);
       this.updateToolCall(toolCallId, "blocked", null, result, null);
       this.recordEvent("writeback_blocked", context, { toolCallId, toolName, result });
-      return result;
+      return { toolCallId, result };
     }
 
     let validated: unknown;
@@ -50,7 +59,7 @@ export class ToolExecutor {
       });
       this.updateToolCall(toolCallId, "failed", safeInputFailureSummary(toolName, context), null, result);
       this.recordEvent("tool_call_failed", context, { toolCallId, toolName, result });
-      return result;
+      return { toolCallId, result };
     }
 
     this.recordEvent("writeback_requested", context, {
@@ -64,7 +73,7 @@ export class ToolExecutor {
 
     try {
       const result = await this.router.route(tool, validated, context);
-      return this.finalizeResult(toolCallId, toolName, context, inputSummary, result);
+      return { toolCallId, result: this.finalizeResult(toolCallId, toolName, context, inputSummary, result) };
     } catch (error) {
       const result = errorResult({
         operation: toolName,
@@ -73,7 +82,7 @@ export class ToolExecutor {
       });
       this.updateToolCall(toolCallId, "failed", inputSummary, null, result);
       this.recordEvent("tool_call_failed", context, { toolCallId, toolName, result });
-      return result;
+      return { toolCallId, result };
     }
   }
 

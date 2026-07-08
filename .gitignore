@@ -19,5 +19,9 @@
 # Node dependencies
 node_modules/
 
+# Web Dashboard generated output
+/apps/web-dashboard/dist/
+/apps/web-dashboard/dist-smoke/
+
 __pycache__/
 *.py[cod]

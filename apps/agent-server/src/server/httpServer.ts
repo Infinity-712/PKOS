@@ -1,10 +1,15 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
+import { handleActionRoutes } from "../actions/ActionRoutes.js";
+import { handleAuditRoutes } from "../audit/AuditRoutes.js";
 import { ContextBuilder } from "../context/ContextBuilder.js";
 import { openAgentDatabase, type AgentDatabase } from "../db/connection.js";
 import { EventStore } from "../events/EventStore.js";
 import { GenerationManager } from "../runtime/GenerationManager.js";
 import { AgentRunner } from "../runtime/AgentRunner.js";
+import { ToolExecutor } from "../tools/ToolExecutor.js";
+import { createDefaultToolRegistry } from "../tools/ToolRegistry.js";
+import { WritebackRouter } from "../writeback/WritebackRouter.js";
 import { handleChatRoutes, sendJson } from "./chatRoutes.js";
 
 export type AgentHttpServerOptions = {
@@ -17,6 +22,9 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
   const generations = new GenerationManager(db, events);
   const contextBuilder = new ContextBuilder(db);
   const runner = new AgentRunner(db, generations, undefined, events, contextBuilder);
+  const registry = createDefaultToolRegistry();
+  const writebackRouter = new WritebackRouter();
+  const toolExecutor = new ToolExecutor(db, registry, writebackRouter, events);
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
@@ -26,6 +34,14 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       }
 
       if (await handleChatRoutes(req, res, { db, runner, contextBuilder })) {
+        return;
+      }
+
+      if (await handleActionRoutes(req, res, { db, registry, executor: toolExecutor, events })) {
+        return;
+      }
+
+      if (await handleAuditRoutes(req, res, { db })) {
         return;
       }
 

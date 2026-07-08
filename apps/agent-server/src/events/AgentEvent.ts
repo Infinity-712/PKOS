@@ -15,6 +15,7 @@ export const agentEventTypes = [
   "review_candidate_created",
   "scheduler_run",
   "context_built",
+  "action_request_resolved",
 ] as const;
 
 export type AgentEventType = (typeof agentEventTypes)[number];

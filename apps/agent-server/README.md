@@ -12,11 +12,12 @@ This package provides the first PKOS-native Agent Runtime skeleton:
 - bounded read-only runtime context;
 - internal L1 append-only writeback foundation;
 - dry-run generation without external APIs;
+- sanitized read-only Audit API for dashboard inspection;
 - local HTTP endpoints for smoke testing.
 
 ## Non-goals
 
-This skeleton does not implement real LLM calls, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, Electron UI, Web Dashboard integration, OpenClaw, WeChat, formal tasks, trusted migration, durable agent memory, or object mutation.
+This skeleton does not implement real LLM calls, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, Electron UI, OpenClaw, WeChat, formal tasks, trusted migration, durable agent memory, or object mutation.
 
 ## SQLite Driver
 
@@ -49,6 +50,9 @@ npm run check
 npm run smoke
 npm run context-smoke
 npm run writeback-smoke
+npm run action-api-smoke
+npm run action-recovery-smoke
+npm run audit-api-smoke
 npm run dev
 ```
 
@@ -57,6 +61,26 @@ npm run dev
 `npm run context-smoke` verifies the ContextBuilder contract, including bounded Flow Hub reads, recent message limits, missing/invalid context degradation, `context_built` event summaries, and the read-only context debug endpoint.
 
 `npm run writeback-smoke` uses a temporary `PKOS_DATA_ROOT`, invokes the real Python PKOS CLI, and verifies append-only writes, ToolExecutor audit events, blocked permissions, CLI failure handling, and audit redaction.
+
+`npm run action-api-smoke` verifies migrations, fixed Action API endpoints, request idempotency, replay/conflict/running behavior, CLI failure replay, concurrent request safety, and action audit redaction.
+
+`npm run action-recovery-smoke` verifies stale running detection, indeterminate outcomes, human resolution, append-only resolution audit, concurrent resolution safety, and migration from version 2 to version 3.
+
+`npm run audit-api-smoke` verifies the read-only Audit API, filters, pagination, invalid query handling, and payload summary redaction.
+
+## SQLite Migrations
+
+Startup uses a minimal migration runner backed by `PRAGMA user_version`. No ORM or external migration framework is used.
+
+Current migrations:
+
+- `0001_initial.sql`: creates the existing v0.6 skeleton tables with `CREATE TABLE IF NOT EXISTS`;
+- `0002_action_requests.sql`: adds `action_requests` for fixed Action API idempotency and replay;
+- `0003_action_request_resolutions.sql`: adds append-only human resolution audit for indeterminate action requests.
+
+Each migration runs inside a SQLite transaction and advances `user_version` only after the SQL succeeds. If a migration fails, startup fails and write APIs are not available from that database handle. Existing skeleton databases with tables but `user_version = 0` are upgraded safely because migrations use idempotent `CREATE ... IF NOT EXISTS` statements. Version 2 databases are upgraded to version 3 without dropping `action_requests`, `tool_calls`, or `agent_events`.
+
+`schema.sql` is retained as a legacy/bootstrap schema reference. Runtime startup is governed by `MigrationRunner`.
 
 ## ContextBuilder
 
@@ -116,6 +140,78 @@ The CLI process runner uses fixed argument arrays with `shell: false`, runs from
 
 Audit data is minimized. `tool_calls` and `agent_events` record operation, enums, tags, source references, content/note length, and SHA-256 hashes. They do not duplicate full inbox content or state notes.
 
+## Fixed Action API
+
+The Action API is for explicit future Web/Electron user actions. It is not Agent autonomous behavior, not chat command routing, and not natural-language tool selection.
+
+Endpoints:
+
+- `POST /api/actions/inbox-append` maps only to `pkos.inbox.append`;
+- `POST /api/actions/state-append` maps only to `pkos.state.append`.
+
+Clients cannot provide a tool name, executable, module, CLI subcommand, or file path. Unknown body fields are rejected, including override attempts such as `toolName`, `command`, or `executable`.
+
+Every request must include `requestId`. The server validates and normalizes the action payload first, then stores only a stable SHA-256 payload hash in `action_requests`. The hash is based on normalized validated input, not raw JSON key order.
+
+Idempotency behavior:
+
+- first `requestId` + payload: insert `running`, execute the fixed tool, then store `completed` or `failed`;
+- same `requestId` + same payload after completion: return the stored sanitized result with `replayed: true`;
+- same `requestId` + same payload after failure: return the stored failure with `replayed: true`; no automatic retry;
+- same `requestId` + different payload: return `409 idempotency_conflict`; no write;
+- same `requestId` while fresh `running`: return `409 request_in_progress`; no second write;
+- same `requestId` while stale `running` or stored `indeterminate`: return `409 request_indeterminate`; no retry and no vault scan.
+
+Request limits:
+
+- JSON body max: 64 KiB;
+- bounded `requestId`, `sessionId`, and `sourceMessageId`;
+- bounded `content`, `note`, tags, and metadata JSON;
+- non-JSON bodies return structured 400 errors;
+- prototype-pollution keys such as `__proto__`, `constructor`, and `prototype` are rejected.
+
+HTTP status mapping:
+
+- `200`: written or replayed completed result;
+- `400`: invalid input or invalid JSON;
+- `403`: blocked or permission denied;
+- `409`: idempotency conflict or request in progress;
+- `500`: CLI failure or internal writeback failure;
+- `504`: timeout.
+
+The API never returns raw stderr, environment variables, internal command paths, vault record full text, or secrets.
+
+`action_requests` stores `request_id`, action name, payload hash, status, optional `tool_call_id`, and sanitized result/error JSON. It does not store full inbox content or full state notes.
+
+## Action Recovery
+
+There is an external write crash window:
+
+1. `action_requests` is written as `running`;
+2. the Python CLI may append to the PKOS vault;
+3. the Node process may crash before `action_requests` is updated to `completed`.
+
+When that happens, the runtime cannot safely claim either success or failure. It also must not retry, because retrying could duplicate an append-only vault write.
+
+Stored statuses:
+
+- `running`: the operation may still be executing;
+- `completed`: the write is confirmed, either by normal completion or human verification;
+- `failed`: the write is confirmed not successful, or the human explicitly abandoned it;
+- `indeterminate`: the outcome is unknown and requires human verification.
+
+The server primarily uses derived effective status. A stored `running` request becomes effectively `indeterminate` when `now - updated_at >= PKOS_ACTION_RUNNING_STALE_MS`. The default threshold is `300000` ms. Startup does not bulk rewrite stale rows, because another process may still be active and there is no multi-instance lock in this sprint.
+
+Human resolution:
+
+- `confirmed_written`: a human checked the authority log and confirmed a write exists; the request becomes `completed`;
+- `confirmed_not_written`: a human checked and confirmed no write exists; the request becomes `failed` with `human_verified_not_written`;
+- `abandoned`: a human chooses not to verify further; the request becomes `failed` with `human_abandoned_indeterminate`.
+
+Every human resolution appends one row to `action_request_resolutions` and updates the final `action_requests` status in the same SQLite transaction. Each `requestId` accepts only one final resolution; duplicate or concurrent resolution attempts return `409 already_resolved`.
+
+Resolution never calls `ToolExecutor`, never runs Python, never writes the PKOS vault, never guesses a `recordId`, and never scans the vault to infer a result. Future Web Dashboard work should show indeterminate requests clearly and ask the human to inspect the authority log.
+
 ## API
 
 - `GET /health`
@@ -123,6 +219,12 @@ Audit data is minimized. `tool_calls` and `agent_events` record operation, enums
 - `GET /api/chat/sessions`
 - `POST /api/chat/send`
 - `GET /api/context/:sessionId`
+- `POST /api/actions/inbox-append`
+- `POST /api/actions/state-append`
+- `GET /api/actions/requests`
+- `GET /api/actions/requests/:requestId`
+- `POST /api/actions/requests/:requestId/resolve`
+- `GET /api/audit/events`
 
 `POST /api/chat/send` accepts:
 
@@ -138,6 +240,28 @@ The default response is `application/x-ndjson`, one persisted `AgentEvent` per l
 `GET /api/context/:sessionId` is a read-only debug endpoint. It returns the bounded runtime context for an existing session and does not modify authority data.
 
 No public tool execution API exists in this skeleton.
+
+The fixed Action API is not wired into `POST /api/chat/send`.
+
+`GET /api/audit/events` is read-only and returns sanitized event summaries for the local dashboard. Supported query parameters are `type`, `severity`, `sessionId`, `generationId`, `limit`, and `before`. The default limit is 50 and the maximum is 200. The route never returns raw `payload_json`, full message text, full context items, capture content, state notes, raw reason text, stderr, command paths, or secrets.
+
+## Web Dashboard
+
+The companion dashboard lives in `apps/web-dashboard`. In development, run the Agent Server and the dashboard in two terminals:
+
+```bash
+cd apps/agent-server
+npm run dev
+```
+
+```bash
+cd apps/web-dashboard
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. Vite proxies `/api` and `/health` to `http://127.0.0.1:8790`.
+
+The dashboard is a local human operations surface for health, fixed capture actions, indeterminate action recovery, and audit viewing. It is not PKOS authority and does not add write permissions, generic tool execution, Agent tool selection, task management, reminders, RAG, memory, OpenClaw, WeChat, or production hosting.
 
 ## PKOS Authority Boundary
 
