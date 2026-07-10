@@ -17,6 +17,7 @@ This package is a small TypeScript client for local PKOS Agent Server APIs. It i
 Covered APIs:
 
 - `GET /health`
+- `GET /api/runtime-info`
 - `POST /api/chat/sessions`
 - `GET /api/chat/sessions`
 - `GET /api/chat/provider-status`
@@ -34,7 +35,7 @@ Web-only authority management surfaces such as Inbox Review, Action Resolution, 
 
 POST calls do not automatically retry. Callers that need idempotent retry should use the exported request attempt model, which freezes `requestId`, endpoint, and payload until the user explicitly starts a new request.
 
-Real-provider chat consent is per request. `sendChatMessage()` can forward `allowExternalProvider: true`, but the client never stores consent and never decides provider policy by itself. Callers can use `getProviderStatus()` and `getProviderProfiles()` to render provider/model/reasoning state without exposing endpoint path/query, API keys, authorization headers, environment variables, or filesystem paths.
+Real-provider chat consent is per request. `sendChatMessage()` can forward `allowExternalProvider: true`, but the client never stores consent and never decides provider policy by itself. Callers can use `getRuntimeInfo()` to render runtime profile, data-root label, short fingerprint, database schema version, and sanitized provider key-configured state. Callers can use `getProviderStatus()` and `getProviderProfiles()` to render provider/model/reasoning state without exposing endpoint path/query, API keys, authorization headers, environment variables, or filesystem paths.
 
 `setProviderSelection()` posts only `profileId`, `modelId`, and `reasoningPreset` to the fixed local endpoint. It does not accept arbitrary URLs, keys, headers, model text input, or request body overrides, and it does not automatically retry.
 

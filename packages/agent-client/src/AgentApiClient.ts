@@ -10,6 +10,7 @@ import {
   isProviderStatusResponse,
   isProviderProfilesResponse,
   isRecord,
+  isRuntimeInfoResponse,
   isStateTimelineResponse,
 } from "./guards.js";
 import { parseNdjsonStream } from "./NdjsonStreamParser.js";
@@ -27,6 +28,7 @@ import type {
   JsonObject,
   ProviderStatusResponse,
   ProviderProfilesResponse,
+  RuntimeInfoResponse,
   SetProviderSelectionInput,
   SendChatMessageInput,
   StateAppendRequest,
@@ -69,6 +71,10 @@ export class AgentApiClient {
   healthWithDiagnostics(signal?: AbortSignal): Promise<HealthDiagnosticsResponse> {
     const requestUrl = this.url("/health");
     return requestJsonWithDiagnostics(this.fetchImpl, requestUrl, { method: "GET", signal }, isHealthResponse);
+  }
+
+  getRuntimeInfo(signal?: AbortSignal): Promise<RuntimeInfoResponse> {
+    return this.get("/api/runtime-info", isRuntimeInfoResponse, signal);
   }
 
   createChatSession(input: { title?: string } = {}, signal?: AbortSignal): Promise<CreateChatSessionResponse> {

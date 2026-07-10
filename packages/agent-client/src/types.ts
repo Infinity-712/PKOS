@@ -6,6 +6,32 @@ export type HealthResponse = {
   ok: boolean;
   service: string;
   mode: string;
+  runtimeFingerprint?: string;
+  profileName?: string;
+};
+
+export type RuntimeInfoResponse = {
+  service: "pkos-agent-server";
+  profileName: string;
+  runtimeFingerprint: string;
+  dataRoot: {
+    label: string;
+    fingerprint: string;
+  };
+  database: {
+    exists: boolean;
+    schemaVersion: number;
+  };
+  process: {
+    startedAt: string;
+    pid: number;
+  };
+  provider: {
+    profileId: string;
+    modelId: string | null;
+    reasoningPreset: string;
+    keyConfigured: boolean;
+  };
 };
 
 export type HealthDiagnosticsResponse = {

@@ -19,7 +19,8 @@
     "provider-config": "tsx src/scripts/providerConfig.ts",
     "provider-config-smoke": "tsx src/scripts/providerConfigSmoke.ts",
     "provider-profile-smoke": "tsx src/scripts/providerProfileSmoke.ts",
-    "chat-history-smoke": "tsx src/scripts/chatHistorySmoke.ts"
+    "chat-history-smoke": "tsx src/scripts/chatHistorySmoke.ts",
+    "runtime-identity-smoke": "tsx src/scripts/runtimeIdentitySmoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

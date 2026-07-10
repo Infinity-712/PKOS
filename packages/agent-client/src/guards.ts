@@ -10,6 +10,7 @@ import type {
   ChatSessionListResponse,
   CreateChatSessionResponse,
   HealthResponse,
+  RuntimeInfoResponse,
   JsonObject,
   ProviderProfilesResponse,
   ProviderStatusResponse,
@@ -51,7 +52,46 @@ export function asJsonObject(value: unknown): JsonObject | null {
 }
 
 export function isHealthResponse(value: unknown): value is HealthResponse {
-  return isRecord(value) && typeof value.ok === "boolean" && typeof value.service === "string" && typeof value.mode === "string";
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    typeof value.service === "string" &&
+    typeof value.mode === "string" &&
+    (value.runtimeFingerprint === undefined || typeof value.runtimeFingerprint === "string") &&
+    (value.profileName === undefined || typeof value.profileName === "string")
+  );
+}
+
+export function isRuntimeInfoResponse(value: unknown): value is RuntimeInfoResponse {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (!hasOnlyKeys(value, ["service", "profileName", "runtimeFingerprint", "dataRoot", "database", "process", "provider"])) {
+    return false;
+  }
+  return (
+    value.service === "pkos-agent-server" &&
+    typeof value.profileName === "string" &&
+    typeof value.runtimeFingerprint === "string" &&
+    isRecord(value.dataRoot) &&
+    hasOnlyKeys(value.dataRoot, ["label", "fingerprint"]) &&
+    typeof value.dataRoot.label === "string" &&
+    typeof value.dataRoot.fingerprint === "string" &&
+    isRecord(value.database) &&
+    hasOnlyKeys(value.database, ["exists", "schemaVersion"]) &&
+    typeof value.database.exists === "boolean" &&
+    typeof value.database.schemaVersion === "number" &&
+    isRecord(value.process) &&
+    hasOnlyKeys(value.process, ["startedAt", "pid"]) &&
+    typeof value.process.startedAt === "string" &&
+    typeof value.process.pid === "number" &&
+    isRecord(value.provider) &&
+    hasOnlyKeys(value.provider, ["profileId", "modelId", "reasoningPreset", "keyConfigured"]) &&
+    typeof value.provider.profileId === "string" &&
+    (typeof value.provider.modelId === "string" || value.provider.modelId === null) &&
+    typeof value.provider.reasoningPreset === "string" &&
+    typeof value.provider.keyConfigured === "boolean"
+  );
 }
 
 export function isCreateChatSessionResponse(value: unknown): value is CreateChatSessionResponse {
@@ -262,6 +302,11 @@ function isStateTimelineItem(value: unknown): boolean {
     typeof value.createdAt === "string" &&
     typeof value.stale === "boolean"
   );
+}
+
+function hasOnlyKeys(value: Record<string, unknown>, allowed: string[]): boolean {
+  const allowedSet = new Set(allowed);
+  return Object.keys(value).every((key) => allowedSet.has(key));
 }
 
 function isWritebackResult(value: unknown): value is WritebackResult {

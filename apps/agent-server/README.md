@@ -37,11 +37,25 @@ Node >= 24
 Environment variables:
 
 - `PKOS_CORE_ROOT`: PKOS repository root. Defaults to the repository root inferred from this package.
-- `PKOS_DATA_ROOT`: private data root. Defaults to `PKOS_CORE_ROOT`.
+- `PKOS_DATA_ROOT`: private data root. Required for direct `npm run dev` startup.
 - `PKOS_AGENT_DB_PATH`: SQLite file path. Defaults to `${PKOS_DATA_ROOT}/runtime/agent/agent.sqlite`.
 - `PKOS_AGENT_PORT`: local HTTP port for `npm run dev`. Defaults to `8790`.
+- `PKOS_RUNTIME_PROFILE_NAME`: local runtime profile label. Defaults to `direct` when not launched by the local runtime script.
 
 The server automatically creates the parent directory for the SQLite database.
+
+Session/message rows, provider runtime selection, and provider connection status
+live in `${PKOS_DATA_ROOT}/runtime/agent/agent.sqlite`. Custom provider profiles
+live in `${PKOS_DATA_ROOT}/runtime/agent/provider_profiles.json`. API key values
+are read only from the Agent Server process environment and are never written to
+SQLite, profile JSON, logs, or HTTP responses.
+
+Direct startup without `PKOS_DATA_ROOT` fails with `PKOS_DATA_ROOT_REQUIRED`.
+For normal local development, prefer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\local-runtime.ps1 start
+```
 
 ## Commands
 
@@ -62,6 +76,7 @@ npm run provider-config -- list
 npm run provider-config-smoke
 npm run provider-profile-smoke
 npm run chat-history-smoke
+npm run runtime-identity-smoke
 npm run dev
 ```
 
@@ -86,6 +101,28 @@ npm run dev
 `npm run provider-config-smoke` verifies local provider profile config management. `npm run provider-profile-smoke` verifies provider profile selection, connection state, generation snapshots, and reasoning-content discard against a local fake provider only.
 
 `npm run chat-history-smoke` verifies the read-only session message history API, session isolation, pagination query validation, reasoning metadata redaction, database read-only behavior, and SQLite reopen persistence.
+
+`npm run runtime-identity-smoke` verifies runtime fingerprint stability, data-root
+separation, runtime-info redaction, lightweight health identity, and schema
+version reporting.
+
+## Runtime Identity API
+
+`GET /api/runtime-info` is read-only and returns bounded identity metadata. It
+includes service, profile name, short runtime fingerprint, data-root label and
+fingerprint, database existence/schema version, process id/start time, and
+sanitized provider selection/keyConfigured state.
+
+The endpoint never returns absolute `coreRoot`, absolute `dataRoot`, DB path,
+API key values, full environment, prompt/context, chat messages, inbox content,
+state notes, or provider raw responses.
+
+`/health` remains lightweight. It may include `profileName` and
+`runtimeFingerprint`, but provider configuration does not make health false.
+
+Startup logs use `[pkos-runtime]` prefixes and may show local absolute paths in
+the terminal for operator diagnosis. They only print `key_configured true/false`,
+never key values.
 
 When testing Desktop chat history after route changes, ensure any old listener on
 `127.0.0.1:8790` has been stopped before starting `npm run dev` again. A stale

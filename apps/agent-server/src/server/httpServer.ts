@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import { handleActionRoutes } from "../actions/ActionRoutes.js";
 import { handleAuditRoutes } from "../audit/AuditRoutes.js";
+import { resolveAgentPaths } from "../config/paths.js";
 import { ContextBuilder } from "../context/ContextBuilder.js";
 import { openAgentDatabase, type AgentDatabase } from "../db/connection.js";
 import { EventStore } from "../events/EventStore.js";
@@ -10,6 +11,7 @@ import { handleStateTimelineRoutes } from "../pkos/StateTimelineRoutes.js";
 import { ProviderProfileRegistry } from "../providers/registry/ProviderProfileRegistry.js";
 import { GenerationManager } from "../runtime/GenerationManager.js";
 import { AgentRunner } from "../runtime/AgentRunner.js";
+import { buildRuntimeIdentity, createHealthPayload, createRuntimeInfoPayload, type RuntimeIdentity } from "../runtime/RuntimeIdentity.js";
 import { ToolExecutor } from "../tools/ToolExecutor.js";
 import { createDefaultToolRegistry } from "../tools/ToolRegistry.js";
 import { WritebackRouter } from "../writeback/WritebackRouter.js";
@@ -18,6 +20,7 @@ import { applyCors, handleCorsPreflight } from "./cors.js";
 
 export type AgentHttpServerOptions = {
   db?: AgentDatabase;
+  runtimeIdentity?: RuntimeIdentity;
 };
 
 export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Server {
@@ -29,6 +32,7 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
   const registry = createDefaultToolRegistry();
   const writebackRouter = new WritebackRouter();
   const toolExecutor = new ToolExecutor(db, registry, writebackRouter, events);
+  const runtimeIdentity = options.runtimeIdentity ?? buildRuntimeIdentity({ paths: resolveAgentPaths() });
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
@@ -38,7 +42,12 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       applyCors(req, res);
 
       if (req.method === "GET" && (req.url === "/health" || req.url?.startsWith("/health?"))) {
-        sendJson(res, 200, { ok: true, service: "pkos-agent-server", mode: "dry-run" });
+        sendJson(res, 200, createHealthPayload(runtimeIdentity));
+        return;
+      }
+
+      if (req.method === "GET" && (req.url === "/api/runtime-info" || req.url?.startsWith("/api/runtime-info?"))) {
+        sendJson(res, 200, createRuntimeInfoPayload(runtimeIdentity, db, safeProviderStatus(runner)));
         return;
       }
 
@@ -68,4 +77,19 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       sendJson(res, 500, { ok: false, error: { code: "REQUEST_FAILED", message } });
     }
   });
+}
+
+function safeProviderStatus(runner: AgentRunner) {
+  try {
+    return runner.getProviderStatus();
+  } catch {
+    return {
+      selection: {
+        profileId: "unknown",
+        modelId: null,
+        reasoningPreset: "unknown",
+        keyConfigured: false,
+      },
+    };
+  }
 }

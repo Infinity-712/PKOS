@@ -6,11 +6,20 @@ PKOS Desktop is a local daily interaction surface for the PKOS Agent Server. It 
 
 ## Run
 
-Start the Agent Server separately:
+Recommended: start the local runtime through the root helper so Desktop connects
+to the expected data root and runtime fingerprint:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\local-runtime.ps1 start
+```
+
+If you start the Agent Server separately, set the roots explicitly:
 
 ```bash
 cd apps/agent-server
 npm install
+$env:PKOS_CORE_ROOT="E:\Creation\Codex\PKOS"
+$env:PKOS_DATA_ROOT="E:\Creation\PKOS-Data"
 npm run dev
 ```
 
@@ -26,6 +35,13 @@ npm run dev
 
 Electron does not start, stop, or package the Agent Server. If `/health` is unavailable, the app still opens and asks the user to start PKOS Agent Server first.
 
+Desktop calls `GET /api/runtime-info` and displays only the runtime profile,
+data label, and short fingerprint. It never decides the data root, stores the
+runtime profile, stores API keys, or displays absolute local paths. If runtime
+identity cannot be read while health is available, Desktop shows `Runtime
+identity unavailable`. If health and runtime-info fingerprints disagree, Desktop
+shows a visible `runtime-mismatch` warning without blocking chat.
+
 ## Features
 
 - Agent: read-only chat sessions over the existing Agent Server chat API.
@@ -36,6 +52,7 @@ Electron does not start, stop, or package the Agent Server. If `/health` is unav
 - Model boundary: replies are shown with a fixed warning that model output is not a PKOS authority record and may be wrong.
 - Quick Capture: explicit Inbox and State append actions with frozen `requestId` retry semantics.
 - Status: backend connectivity plus Current State summary from `GET /api/pkos/state-timeline?limit=1`.
+- Runtime identity: profile name, data label, and short fingerprint from `GET /api/runtime-info`.
 - Open Web Dashboard: fixed allowlisted URL `http://127.0.0.1:5173`.
 
 Provider configuration stays in Agent Server runtime config and environment variables. Desktop has no API key, endpoint, model ID, or arbitrary parameter settings UI. A configured profile is not the same as connected: connection becomes `connected` only after a successful generation completes.

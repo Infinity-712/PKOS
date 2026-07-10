@@ -10,13 +10,22 @@ Common browser-safe API types, guards, fetch helpers, NDJSON parsing, and reques
 
 ## Run Locally
 
-Use two terminals.
+Recommended local startup is the root runtime helper:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ..\..\scripts\local-runtime.ps1 start
+```
+
+Manual development can still use two terminals, but set `PKOS_CORE_ROOT` and
+`PKOS_DATA_ROOT` explicitly before starting Agent Server.
 
 Terminal 1:
 
 ```bash
 cd apps/agent-server
 npm install
+$env:PKOS_CORE_ROOT="E:\Creation\Codex\PKOS"
+$env:PKOS_DATA_ROOT="E:\Creation\PKOS-Data"
 npm run dev
 ```
 

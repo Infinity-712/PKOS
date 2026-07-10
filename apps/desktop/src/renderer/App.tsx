@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AgentApiClient, AgentApiClientError, type HealthResponse, type StateTimelineItem } from "@pkos/agent-client";
+import { AgentApiClient, AgentApiClientError, type HealthResponse, type RuntimeInfoResponse, type StateTimelineItem } from "@pkos/agent-client";
 import { agentServerBaseUrl } from "./config.js";
 import { backendStatusFromHealth, EMPTY_CHAT_VIEW_STATE, getChatSessionView, hydrateSessionMessages, type ChatViewState } from "./features/chat/chatModel.js";
 import { AgentPage } from "./pages/AgentPage.js";
@@ -18,6 +18,7 @@ export function App() {
   const client = useMemo(() => new AgentApiClient({ baseUrl: agentServerBaseUrl }), []);
   const [tab, setTab] = useState<TabId>("agent");
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [runtimeInfo, setRuntimeInfo] = useState<RuntimeInfoResponse | null>(null);
   const [currentState, setCurrentState] = useState<StateTimelineItem | null>(null);
   const [chatState, setChatState] = useState<ChatViewState>(EMPTY_CHAT_VIEW_STATE);
   const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null);
@@ -31,9 +32,16 @@ export function App() {
       setMessage(null);
     } catch (error) {
       setHealth(null);
+      setRuntimeInfo(null);
       setCurrentState(null);
       setMessage(networkMessage(error));
       return;
+    }
+
+    try {
+      setRuntimeInfo(await client.getRuntimeInfo());
+    } catch {
+      setRuntimeInfo(null);
     }
 
     try {
@@ -71,6 +79,7 @@ export function App() {
         </div>
         <div className="topbar-actions">
           <span className={backend.connected ? "badge good" : "badge bad"}>{backend.label}</span>
+          <RuntimeIdentityBadge health={health} runtimeInfo={runtimeInfo} />
           <button type="button" onClick={() => void openDashboard()}>
             Open Web Dashboard
           </button>
@@ -97,8 +106,22 @@ export function App() {
         />
       ) : null}
       {tab === "capture" ? <CapturePage client={client} onStateWritten={() => void refreshStatus()} /> : null}
-      {tab === "status" ? <StatusPage health={health} current={currentState} onRefresh={() => void refreshStatus()} /> : null}
+      {tab === "status" ? <StatusPage health={health} runtimeInfo={runtimeInfo} current={currentState} onRefresh={() => void refreshStatus()} /> : null}
     </main>
+  );
+}
+
+function RuntimeIdentityBadge(props: { health: HealthResponse | null; runtimeInfo: RuntimeInfoResponse | null }) {
+  if (!props.runtimeInfo) {
+    return <span className="badge warn">Runtime identity unavailable</span>;
+  }
+  const mismatch =
+    typeof props.health?.runtimeFingerprint === "string" &&
+    props.health.runtimeFingerprint !== props.runtimeInfo.runtimeFingerprint;
+  return (
+    <span className={mismatch ? "badge bad runtime-mismatch" : "badge good"} title={mismatch ? "Connected runtime fingerprint does not match health response." : "Connected runtime identity"}>
+      Runtime: {props.runtimeInfo.profileName} / {props.runtimeInfo.dataRoot.label} / {props.runtimeInfo.runtimeFingerprint.slice(0, 8)}
+    </span>
   );
 }
 

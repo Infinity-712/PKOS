@@ -10,6 +10,9 @@
 /runtime/agent/*.sqlite
 /runtime/agent/*.sqlite-*
 
+# Local runtime bootstrap profile, process ledger, and logs
+/runtime/local/
+
 # PKOS local operational logs
 /inbox/*.jsonl
 /state/*.jsonl

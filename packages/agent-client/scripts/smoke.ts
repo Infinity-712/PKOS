@@ -7,6 +7,7 @@ import {
   applySubmitResponse,
   isHealthResponse,
   isChatMessageListResponse,
+  isRuntimeInfoResponse,
   isSuccessfulAttempt,
   isAgentEvent,
   parseNdjsonStream,
@@ -132,7 +133,18 @@ const client = new AgentApiClient({
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     calls.push({ url, method: init?.method ?? "GET", bodyPresent: init?.body !== undefined, signalPresent: init?.signal !== undefined });
     if (url.endsWith("/health")) {
-      return jsonResponse({ ok: true, service: "pkos-agent-server", mode: "dry-run" });
+      return jsonResponse({ ok: true, service: "pkos-agent-server", mode: "dry-run", runtimeFingerprint: "runtime123456", profileName: "local-main" });
+    }
+    if (url.endsWith("/api/runtime-info")) {
+      return jsonResponse({
+        service: "pkos-agent-server",
+        profileName: "local-main",
+        runtimeFingerprint: "runtime123456",
+        dataRoot: { label: "PKOS-Data", fingerprint: "data123456789" },
+        database: { exists: true, schemaVersion: 5 },
+        process: { startedAt: "2026-07-10T00:00:00.000Z", pid: 12345 },
+        provider: { profileId: "deepseek-official", modelId: "deepseek-v4-pro", reasoningPreset: "high", keyConfigured: true },
+      });
     }
     if (url.endsWith("/api/chat/provider-status")) {
       return jsonResponse(providerStatusPayload());
@@ -181,6 +193,13 @@ const client = new AgentApiClient({
 });
 
 assert(isHealthResponse(await client.health()), "health response guard failed");
+const runtimeInfo = await client.getRuntimeInfo();
+assert(runtimeInfo.profileName === "local-main", "runtime-info client returned wrong profile");
+assert(runtimeInfo.dataRoot.label === "PKOS-Data", "runtime-info data label missing");
+assert(runtimeInfo.provider.keyConfigured === true, "runtime-info keyConfigured missing");
+assert(isRuntimeInfoResponse(runtimeInfo), "runtime-info guard rejected canonical payload");
+assert(!isRuntimeInfoResponse({ ...runtimeInfo, coreRoot: "E:\\\\Creation\\\\Codex\\\\PKOS" }), "runtime-info guard accepted absolute path field");
+assert(!JSON.stringify(runtimeInfo).includes("SECRET"), "runtime-info leaked key-like value");
 const diagnostics = await client.healthWithDiagnostics();
 assert(diagnostics.requestUrl === "http://127.0.0.1:8790/health", "health diagnostics resolved wrong URL");
 assert(diagnostics.status === 200, "health diagnostics did not retain status");

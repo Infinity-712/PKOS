@@ -1,5 +1,37 @@
 # Personal Knowledge OS (PKOS)
 
+## Local Runtime Bootstrap
+
+Recommended local startup is through the runtime profile script, not ad-hoc
+`npm run dev` in multiple terminals:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 configure -DataRoot "E:\Creation\PKOS-Data" -ProfileName "local-main"
+powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 show
+$env:DEEPSEEK_API_KEY="<set-in-current-shell>"
+powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 start
+powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 stop
+```
+
+Different `PKOS_DATA_ROOT` values mean different sessions, messages, provider
+runtime selection, connection status, and custom provider profiles. API keys
+belong only to the Agent Server process environment; the runtime profile,
+SQLite database, README examples, and process ledger must not contain key
+values.
+
+If Agent Server is started directly, set both roots explicitly:
+
+```powershell
+$env:PKOS_CORE_ROOT="E:\Creation\Codex\PKOS"
+$env:PKOS_DATA_ROOT="E:\Creation\PKOS-Data"
+cd apps/agent-server
+npm run dev
+```
+
+Agent Server startup logs print the resolved runtime identity. If port `8790`
+is occupied by a different fingerprint, stop and inspect it manually; PKOS will
+not silently reuse or kill an unknown runtime.
+
 PKOS 是一个私密个人知识与能动性系统。它把知识对象、复习队列、Digest、本地 dashboard 与后续 Flow Hub 连接在同一个可审计的 Git 文件权威层中。
 
 当前主线不建设公开内容链路；所有站点导出都服务于本地私密操作台。

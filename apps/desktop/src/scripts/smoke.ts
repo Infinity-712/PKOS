@@ -211,6 +211,9 @@ for (const forbidden of [
   "indexedDB",
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "coreRoot absolute",
+  "dataRoot absolute",
 ]) {
   assert(!source.includes(forbidden), `desktop source contains forbidden pattern: ${forbidden}`);
 }
@@ -230,6 +233,10 @@ assert(source.includes("protocol.registerSchemesAsPrivileged"), "desktop app sch
 assert(source.includes("protocol.handle"), "desktop app scheme handler missing");
 assert(source.includes("pkos-desktop://app"), "desktop app scheme origin missing");
 assert(source.includes("DESKTOP_CONNECTIVITY_PROBE_OK"), "connectivity probe success marker missing");
+assert(source.includes("runtimeInfo"), "desktop runtime identity state missing");
+assert(source.includes("Runtime:"), "desktop runtime identity display missing");
+assert(source.includes("Runtime identity unavailable"), "desktop runtime identity unavailable fallback missing");
+assert(source.includes("runtime-mismatch"), "desktop runtime mismatch warning missing");
 assert(source.includes("getProviderStatus"), "desktop provider status lookup missing");
 assert(source.includes("getProviderProfiles"), "desktop provider profiles lookup missing");
 assert(source.includes("setProviderSelection"), "desktop provider selection mutation missing");

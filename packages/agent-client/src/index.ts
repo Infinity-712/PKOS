@@ -37,6 +37,7 @@ export {
   isProviderStatusResponse,
   isProviderProfilesResponse,
   isRecord,
+  isRuntimeInfoResponse,
   isStateTimelineResponse,
 } from "./guards.js";
 export type {
@@ -68,6 +69,7 @@ export type {
   ProviderProfilesResponse,
   ProviderProfileSummary,
   ReasoningPreset,
+  RuntimeInfoResponse,
   SetProviderSelectionInput,
   SendChatMessageInput,
   StateAppendRequest,
