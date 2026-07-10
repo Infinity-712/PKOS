@@ -21,6 +21,21 @@ CREATE TABLE IF NOT EXISTS generations (
   status TEXT NOT NULL,
   partial_content TEXT NOT NULL DEFAULT '',
   error_json TEXT,
+  provider_name TEXT,
+  model_name TEXT,
+  provider_id TEXT,
+  profile_id TEXT,
+  protocol TEXT,
+  model_id TEXT,
+  reasoning_preset TEXT,
+  endpoint_origin TEXT,
+  external INTEGER,
+  finish_reason TEXT,
+  input_chars INTEGER,
+  output_chars INTEGER,
+  input_tokens INTEGER,
+  output_tokens INTEGER,
+  error_code TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -56,3 +71,23 @@ CREATE INDEX IF NOT EXISTS idx_generations_session_created
 
 CREATE INDEX IF NOT EXISTS idx_agent_events_generation_ts
   ON agent_events (generation_id, ts);
+
+CREATE TABLE IF NOT EXISTS provider_runtime_selection (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  reasoning_preset TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS provider_connection_status (
+  profile_id TEXT NOT NULL,
+  model_id TEXT NOT NULL,
+  reasoning_preset TEXT NOT NULL,
+  status TEXT NOT NULL,
+  last_attempt_at TEXT,
+  last_success_at TEXT,
+  last_error_code TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (profile_id, model_id, reasoning_preset)
+);

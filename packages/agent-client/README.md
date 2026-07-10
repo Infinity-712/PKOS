@@ -19,7 +19,11 @@ Covered APIs:
 - `GET /health`
 - `POST /api/chat/sessions`
 - `GET /api/chat/sessions`
+- `GET /api/chat/provider-status`
+- `GET /api/chat/provider-profiles`
+- `POST /api/chat/provider-selection`
 - `POST /api/chat/send`
+- `POST /api/chat/generations/:generationId/abort`
 - `POST /api/actions/inbox-append`
 - `POST /api/actions/state-append`
 - `GET /api/pkos/state-timeline`
@@ -29,6 +33,12 @@ Web-only authority management surfaces such as Inbox Review, Action Resolution, 
 ## Behavior
 
 POST calls do not automatically retry. Callers that need idempotent retry should use the exported request attempt model, which freezes `requestId`, endpoint, and payload until the user explicitly starts a new request.
+
+Real-provider chat consent is per request. `sendChatMessage()` can forward `allowExternalProvider: true`, but the client never stores consent and never decides provider policy by itself. Callers can use `getProviderStatus()` and `getProviderProfiles()` to render provider/model/reasoning state without exposing endpoint path/query, API keys, authorization headers, environment variables, or filesystem paths.
+
+`setProviderSelection()` posts only `profileId`, `modelId`, and `reasoningPreset` to the fixed local endpoint. It does not accept arbitrary URLs, keys, headers, model text input, or request body overrides, and it does not automatically retry.
+
+`abortGeneration(generationId)` calls the fixed backend abort endpoint. It requests local provider stream cancellation, but remote model services may already have processed part of a request.
 
 The client does not persist payloads, does not use browser storage, and does not print message/content/note fields. It also does not expose Python commands, executable paths, or filesystem paths.
 

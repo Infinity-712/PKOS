@@ -1,6 +1,6 @@
-# PKOS Agent Server Skeleton
+# PKOS Agent Server
 
-> Status: v0.6 first-step skeleton. This package is a local dry-run runtime only.
+> Status: v0.6 local Agent Runtime with dry-run default and optional read-only OpenAI-compatible generation.
 
 ## Goal
 
@@ -11,13 +11,14 @@ This package provides the first PKOS-native Agent Runtime skeleton:
 - structured AgentEvent stream;
 - bounded read-only runtime context;
 - internal L1 append-only writeback foundation;
-- dry-run generation without external APIs;
+- dry-run generation by default;
+- optional OpenAI Chat Completions compatible read-only text generation;
 - sanitized read-only Audit API for dashboard inspection;
 - local HTTP endpoints for smoke testing.
 
 ## Non-goals
 
-This skeleton does not implement real LLM calls, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, Electron UI, OpenClaw, WeChat, formal tasks, trusted migration, durable agent memory, or object mutation.
+This skeleton does not implement tool calling, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, OpenClaw, WeChat, formal tasks, trusted migration, durable agent memory, or object mutation.
 
 ## SQLite Driver
 
@@ -55,6 +56,12 @@ npm run action-recovery-smoke
 npm run audit-api-smoke
 npm run inbox-review-api-smoke
 npm run state-timeline-api-smoke
+npm run cors-smoke
+npm run llm-readonly-smoke
+npm run provider-config -- list
+npm run provider-config-smoke
+npm run provider-profile-smoke
+npm run chat-history-smoke
 npm run dev
 ```
 
@@ -74,6 +81,18 @@ npm run dev
 
 `npm run state-timeline-api-smoke` verifies the read-only State Timeline API against a temporary `PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI. It covers empty state, ordering, current/filter semantics, stale display, malformed JSONL failure, append-then-refresh, and audit redaction.
 
+`npm run llm-readonly-smoke` verifies the real-provider read-only MVP against a local fake Chat Completions server. It does not call an external model. It covers dry-run default behavior, provider configuration validation, per-request external consent, bounded prompt assembly, SSE streaming, tool output rejection, safe error mapping, abort semantics, terminal generation state, and secret redaction.
+
+`npm run provider-config-smoke` verifies local provider profile config management. `npm run provider-profile-smoke` verifies provider profile selection, connection state, generation snapshots, and reasoning-content discard against a local fake provider only.
+
+`npm run chat-history-smoke` verifies the read-only session message history API, session isolation, pagination query validation, reasoning metadata redaction, database read-only behavior, and SQLite reopen persistence.
+
+When testing Desktop chat history after route changes, ensure any old listener on
+`127.0.0.1:8790` has been stopped before starting `npm run dev` again. A stale
+Agent Server process can still answer `/health` and `/api/chat/sessions` while
+returning `404 NOT_FOUND` for newer routes such as
+`GET /api/chat/sessions/:sessionId/messages`.
+
 ## SQLite Migrations
 
 Startup uses a minimal migration runner backed by `PRAGMA user_version`. No ORM or external migration framework is used.
@@ -82,15 +101,162 @@ Current migrations:
 
 - `0001_initial.sql`: creates the existing v0.6 skeleton tables with `CREATE TABLE IF NOT EXISTS`;
 - `0002_action_requests.sql`: adds `action_requests` for fixed Action API idempotency and replay;
-- `0003_action_request_resolutions.sql`: adds append-only human resolution audit for indeterminate action requests.
+- `0003_action_request_resolutions.sql`: adds append-only human resolution audit for indeterminate action requests;
+- `0004_generation_provider_metadata.sql`: adds safe provider/model/finish/token/error metadata columns for generations;
+- `0005_provider_runtime_selection.sql`: adds runtime provider selection, provider connection status, and generation provider snapshot columns.
 
-Each migration runs inside a SQLite transaction and advances `user_version` only after the SQL succeeds. If a migration fails, startup fails and write APIs are not available from that database handle. Existing skeleton databases with tables but `user_version = 0` are upgraded safely because migrations use idempotent `CREATE ... IF NOT EXISTS` statements. Version 2 databases are upgraded to version 3 without dropping `action_requests`, `tool_calls`, or `agent_events`.
+Each migration runs inside a SQLite transaction and advances `user_version` only after the SQL succeeds. If a migration fails, startup fails and write APIs are not available from that database handle. Existing skeleton databases with tables but `user_version = 0` are upgraded safely because migrations use idempotent `CREATE ... IF NOT EXISTS` statements. Version 2 and 3 databases are upgraded without dropping `action_requests`, `tool_calls`, `agent_events`, `chat_messages`, or existing generation rows.
 
 `schema.sql` is retained as a legacy/bootstrap schema reference. Runtime startup is governed by `MigrationRunner`.
 
+## Provider Configuration
+
+Default mode is dry-run:
+
+```powershell
+npm run dev
+```
+
+Provider identity is split into separate concepts:
+
+- `providerId`: vendor or service identity, such as `deepseek`, `openai`, or `custom-openai`;
+- `protocol`: call protocol, currently `dry-run` or `openai-chat-completions`;
+- `profileId`: local runtime configuration profile;
+- `modelId`: actual model identifier within a profile;
+- `reasoningPreset`: normalized runtime preset. Built-in DeepSeek V4 models expose `off`, `high`, and `max`; generic custom profiles expose only what their model profile declares.
+
+User profiles live at:
+
+```text
+${PKOS_DATA_ROOT}/runtime/agent/provider_profiles.json
+```
+
+This is runtime configuration, not PKOS authority, and it is under ignored `runtime/`. It must not enter `PromptAssembler` or `ContextBuilder`.
+
+### DeepSeek Official Quick Config
+
+The built-in `deepseek-official` profile is always available and is not written to `provider_profiles.json`. It exposes:
+
+- `deepseek-v4-pro` as `DeepSeek V4 Pro`;
+- `deepseek-v4-flash` as `DeepSeek V4 Flash`;
+- reasoning presets `off`, `high`, and `max`.
+
+It intentionally does not expose deprecated compatibility aliases such as `deepseek-chat` or `deepseek-reasoner`.
+
+Configure only the key environment variable in the same shell that starts Agent Server:
+
+```powershell
+$env:DEEPSEEK_API_KEY="<set-in-current-shell>"
+cd apps/agent-server
+npm run dev
+```
+
+Then choose `DeepSeek V4 Pro` or `DeepSeek V4 Flash` in Desktop and select reasoning `off`, `high`, or `max`. Profile selection does not send data and does not count as external consent. Before the first successful call the connection state is `configured_unverified`, not `connected`. Restart Agent Server from the shell where `DEEPSEEK_API_KEY` is set when changing the environment.
+
+DeepSeek V4 reasoning request mapping is static server code:
+
+- `off`: `{ "thinking": { "type": "disabled" } }`
+- `high`: `{ "thinking": { "type": "enabled" }, "reasoning_effort": "high" }`
+- `max`: `{ "thinking": { "type": "enabled" }, "reasoning_effort": "max" }`
+
+`low` and `medium` are not exposed for DeepSeek V4 because the API does not provide distinct low/medium behavior for this surface.
+
+### Custom Compatible Profiles
+
+Custom compatible providers still use the local provider-config CLI:
+
+```powershell
+npm run provider-config -- set custom-deepseek --json '{
+  "providerId": "deepseek",
+  "displayName": "Custom DeepSeek Compatible",
+  "protocol": "openai-chat-completions",
+  "baseUrl": "https://your-api-base.example/v1",
+  "apiKeyEnv": "CUSTOM_PROVIDER_API_KEY",
+  "external": true,
+  "enabled": true,
+  "models": [
+    {
+      "id": "model-name",
+      "displayName": "model-name",
+      "contextWindow": 128000,
+      "maxOutputTokens": 4096,
+      "reasoningControl": {
+        "kind": "fixed",
+        "defaultPreset": "off"
+      }
+    }
+  ]
+}'
+```
+
+Do not write a real key to Git, README examples, screenshots, logs, tests, SQLite, or profile config. Profile JSON must use `apiKeyEnv`, not `apiKey`. The provider-config command rejects plaintext `apiKey`, `authorization`, `headers`, `bearerToken`, `secret`, `password`, `extraBody`, `requestTemplate`, `command`, and `executable`. User profile IDs may not override built-in IDs such as `deepseek-official`.
+
+Provider config commands:
+
+```bash
+npm run provider-config -- list
+npm run provider-config -- show custom-deepseek
+npm run provider-config -- set custom-deepseek --json '{...}'
+npm run provider-config -- remove custom-deepseek
+npm run provider-config -- validate
+```
+
+Base URLs must be HTTPS, must not contain username/password, query, fragment, or path traversal, and are not supplied by Desktop. This sprint does not enable arbitrary local provider URLs.
+
+Selecting a model is a runtime setting stored in SQLite `provider_runtime_selection`. It never triggers an external request and does not count as external data consent. If the saved selection is invalid, disabled, or removed, runtime falls back to dry-run. It never automatically selects the first external profile.
+
+Connection state is evidence-based:
+
+- `dry_run`: current selection is Dry-run;
+- `unconfigured`: profile/model/key is missing or incomplete;
+- `configured_unverified`: config is complete, but no successful call has completed for that profile/model/reasoning preset;
+- `connected`: the latest successful generation completed for that selection;
+- `error`: the latest provider call failed with a sanitized error code;
+- `disabled`: the selected profile is disabled.
+
+The server never probes providers on startup and never sends a background billable request just to test connectivity. Having an API key only means configured, not connected.
+
+`GET /api/chat/provider-profiles` returns sanitized selectable profiles and model/reasoning options for Desktop. `POST /api/chat/provider-selection` accepts only `profileId`, `modelId`, and `reasoningPreset`; it rejects base URL, API key, headers, arbitrary body, and unknown presets. `GET /api/chat/provider-status` reports the current selection, connection state, `consentRequired`, endpoint origin, `apiKeyEnvName`, and `keyConfigured`; it never returns endpoint path/query, API key values, authorization headers, prompt, context, or environment variables.
+
+The OpenAI-compatible adapter sends only:
+
+```json
+{
+  "model": "...",
+  "messages": [],
+  "stream": true
+}
+```
+
+It may include `max_tokens` only when configured by the selected model. It does not send tools, functions, response format, hidden metadata, arbitrary request body, request templates, or provider-specific parameters. It parses SSE `data: {json}` events and `[DONE]`, maps only `choices[0].delta.content` to text deltas, and rejects `tool_calls` or `function_call` with `unsupported_provider_tool_output` without invoking `ToolExecutor`.
+
+Provider extension fields such as `reasoning_content`, `reasoning`, `chain_of_thought`, `thoughts`, `analysis`, `internal_reasoning`, and `hidden_reasoning` are ignored. They are not displayed, persisted, added to recent messages, or resent. The only DeepSeek V4 reasoning fields emitted by this sprint are the static whitelisted `thinking` and `reasoning_effort` fields described above.
+
+External data egress requires per-request consent. In real-provider mode, `POST /api/chat/send` must include:
+
+```json
+{
+  "allowExternalProvider": true
+}
+```
+
+Missing consent returns `412 external_provider_consent_required` before a generation, chat message, or external request is created. Consent is not stored as a global setting, not stored in Desktop, and not granted by provider selection.
+
+Generation rows snapshot the selected provider/profile/protocol/model/reasoning/endpointOrigin/external values when the generation is created. Later global selection changes do not affect that generation, its abort path, or its audit metadata.
+
+Prompt assembly is bounded and in-memory only. It consumes `ContextBuilder` output plus the current session's bounded recent messages. It must not read the full vault, raw inbox, review logs, arbitrary files, RAG indexes, or secrets. The assembled prompt is not written to SQLite or events.
+
+Abort endpoint:
+
+```text
+POST /api/chat/generations/:generationId/abort
+```
+
+Abort requests stop the local provider fetch/stream when possible and mark active generations as `aborted`. Remote providers may already have processed part of the request; abort does not guarantee remote compute or cost cancellation.
+
 ## ContextBuilder
 
-The ContextBuilder is a runtime-only input pack for the dry-run AgentRunner. It reads only:
+The ContextBuilder is a runtime-only input pack for AgentRunner and provider prompt assembly. It reads only:
 
 - `${PKOS_DATA_ROOT}/runtime/agent_context.json`;
 - recent `chat_messages` rows for the current session;
@@ -243,7 +409,12 @@ Resolution never calls `ToolExecutor`, never runs Python, never writes the PKOS 
 - `GET /health`
 - `POST /api/chat/sessions`
 - `GET /api/chat/sessions`
+- `GET /api/chat/sessions/:sessionId/messages`
+- `GET /api/chat/provider-status`
+- `GET /api/chat/provider-profiles`
+- `POST /api/chat/provider-selection`
 - `POST /api/chat/send`
+- `POST /api/chat/generations/:generationId/abort`
 - `GET /api/context/:sessionId`
 - `POST /api/actions/inbox-append`
 - `POST /api/actions/state-append`
@@ -261,11 +432,14 @@ Resolution never calls `ToolExecutor`, never runs Python, never writes the PKOS 
 ```json
 {
   "sessionId": "...",
-  "message": "..."
+  "message": "...",
+  "allowExternalProvider": false
 }
 ```
 
 The default response is `application/x-ndjson`, one persisted `AgentEvent` per line.
+
+Model output is non-authoritative runtime output. It may be wrong and must not be treated as PKOS authority.
 
 `GET /api/context/:sessionId` is a read-only debug endpoint. It returns the bounded runtime context for an existing session and does not modify authority data.
 

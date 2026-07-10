@@ -53,14 +53,14 @@ try {
   console.log("ACTION_API_SMOKE_OK");
 } finally {
   restoreEnv();
-  rmSync(root, { recursive: true, force: true });
+  safeRemoveRoot(root);
 }
 
 function testFreshMigration(): void {
   const env = useDataRoot("fresh-migration");
   const db = openAgentDatabase(env);
   try {
-    assertUserVersion(db, 3);
+    assertUserVersion(db, 5);
     for (const table of ["chat_sessions", "chat_messages", "generations", "agent_events", "tool_calls", "action_requests", "action_request_resolutions"]) {
       assert(tableExists(db, table), `fresh database missing table ${table}`);
     }
@@ -74,21 +74,24 @@ function testExistingDatabaseMigration(): void {
   mkdirSync(dirname(env.agentDbPath), { recursive: true });
   const legacy = new DatabaseSync(env.agentDbPath);
   try {
-    legacy.exec(readFileSync(join(coreRoot, "apps", "agent-server", "src", "db", "schema.sql"), "utf8"));
+    legacy.exec(readFileSync(join(coreRoot, "apps", "agent-server", "src", "db", "migrations", "0001_initial.sql"), "utf8"));
+    legacy.exec(readFileSync(join(coreRoot, "apps", "agent-server", "src", "db", "migrations", "0002_action_requests.sql"), "utf8"));
+    legacy.exec(readFileSync(join(coreRoot, "apps", "agent-server", "src", "db", "migrations", "0003_action_request_resolutions.sql"), "utf8"));
+    legacy.exec("PRAGMA user_version = 3");
     legacy
       .prepare("INSERT INTO chat_sessions (id, title, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)")
       .run("legacy-session", "Legacy", "active", "2026-07-01T00:00:00.000Z", "2026-07-01T00:00:00.000Z");
     legacy
       .prepare("INSERT INTO chat_messages (id, session_id, role, content, metadata_json, created_at) VALUES (?, ?, ?, ?, NULL, ?)")
       .run("legacy-message", "legacy-session", "user", "legacy content", "2026-07-01T00:00:01.000Z");
-    assertUserVersion(legacy, 0);
+    assertUserVersion(legacy, 3);
   } finally {
     legacy.close();
   }
 
   const migrated = openAgentDatabase(env);
   try {
-    assertUserVersion(migrated, 3);
+    assertUserVersion(migrated, 5);
     assert(tableExists(migrated, "action_requests"), "existing database did not get action_requests");
     assert(tableExists(migrated, "action_request_resolutions"), "existing database did not get action_request_resolutions");
     const row = migrated.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE id = ?").get("legacy-message") as CountRow;
@@ -411,5 +414,16 @@ function restoreEnv(): void {
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
+  }
+}
+
+function safeRemoveRoot(path: string): void {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  } catch (error) {
+    if (error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "EPERM") {
+      return;
+    }
+    throw error;
   }
 }

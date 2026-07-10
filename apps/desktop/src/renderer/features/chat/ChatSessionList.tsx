@@ -1,4 +1,4 @@
-import type { ChatSession } from "@pkos/agent-client";
+import { formatDateTime, type ChatSession } from "@pkos/agent-client";
 
 export function ChatSessionList(props: {
   sessions: ChatSession[];
@@ -24,7 +24,7 @@ export function ChatSessionList(props: {
             onClick={() => props.onSelect(session.id)}
           >
             <span>{session.title || "New session"}</span>
-            <small>{session.updated_at}</small>
+            <small>{formatDateTime(session.updated_at)}</small>
           </button>
         ))}
         {props.sessions.length === 0 ? <p className="muted">No sessions yet.</p> : null}

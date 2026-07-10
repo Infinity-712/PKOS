@@ -1,14 +1,19 @@
 import type {
   ActionSubmitResponse,
+  AbortGenerationResponse,
   AgentEvent,
   AgentEventSeverity,
   AgentEventType,
   ApiErrorPayload,
   ChatSession,
+  ChatMessageListResponse,
   ChatSessionListResponse,
   CreateChatSessionResponse,
   HealthResponse,
   JsonObject,
+  ProviderProfilesResponse,
+  ProviderStatusResponse,
+  ReasoningPreset,
   StateTimelineResponse,
   WritebackResult,
 } from "./types.js";
@@ -29,6 +34,7 @@ const AGENT_EVENT_TYPES = new Set<AgentEventType>([
   "scheduler_run",
   "context_built",
   "action_request_resolved",
+  "provider_selection_changed",
 ]);
 
 const SEVERITIES = new Set<AgentEventSeverity>(["debug", "info", "warn", "error"]);
@@ -56,8 +62,70 @@ export function isChatSessionListResponse(value: unknown): value is ChatSessionL
   return isRecord(value) && value.ok === true && Array.isArray(value.sessions) && value.sessions.every(isChatSession);
 }
 
-export function isAgentEvent(value: unknown): value is AgentEvent {
+export function isChatMessageListResponse(value: unknown): value is ChatMessageListResponse {
   return (
+    isRecord(value) &&
+    typeof value.sessionId === "string" &&
+    Array.isArray(value.items) &&
+    value.items.every(isChatMessage) &&
+    (value.nextBefore === null || typeof value.nextBefore === "string")
+  );
+}
+
+export function isProviderStatusResponse(value: unknown): value is ProviderStatusResponse {
+  return (
+    isRecord(value) &&
+    isProviderProtocol(value.provider) &&
+    isRecord(value.selection) &&
+    typeof value.selection.profileId === "string" &&
+    typeof value.selection.providerId === "string" &&
+    typeof value.selection.providerDisplayName === "string" &&
+    isProviderProtocol(value.selection.protocol) &&
+    typeof value.selection.modelId === "string" &&
+    typeof value.selection.modelDisplayName === "string" &&
+    isReasoningPreset(value.selection.reasoningPreset) &&
+    typeof value.selection.external === "boolean" &&
+    (value.selection.endpointOrigin === undefined || typeof value.selection.endpointOrigin === "string") &&
+    (value.selection.apiKeyEnvName === undefined || typeof value.selection.apiKeyEnvName === "string") &&
+    (value.selection.keyConfigured === undefined || typeof value.selection.keyConfigured === "boolean") &&
+    isRecord(value.connection) &&
+    isProviderConnectionState(value.connection.state) &&
+    (typeof value.connection.lastAttemptAt === "string" || value.connection.lastAttemptAt === null) &&
+    (typeof value.connection.lastSuccessAt === "string" || value.connection.lastSuccessAt === null) &&
+    (typeof value.connection.lastErrorCode === "string" || value.connection.lastErrorCode === null) &&
+    typeof value.consentRequired === "boolean" &&
+    typeof value.configured === "boolean" &&
+    isRecord(value.capabilities) &&
+    value.capabilities.streaming === true &&
+    value.capabilities.textGeneration === true &&
+    value.capabilities.toolCallingEnabled === false &&
+    Array.isArray(value.capabilities.reasoningPresets) &&
+    value.capabilities.reasoningPresets.every(isReasoningPreset) &&
+    (typeof value.model === "string" || value.model === null) &&
+    (value.dataEgress === "none" || value.dataEgress === "configured-endpoint") &&
+    value.toolsEnabled === false &&
+    value.readOnly === true &&
+    (value.errorCode === undefined || value.errorCode === "provider_not_configured" || value.errorCode === "provider_profile_disabled")
+  );
+}
+
+export function isProviderProfilesResponse(value: unknown): value is ProviderProfilesResponse {
+  return isRecord(value) && Array.isArray(value.items) && value.items.every(isProviderProfileSummary);
+}
+
+export function isAbortGenerationResponse(value: unknown): value is AbortGenerationResponse {
+  return (
+    isRecord(value) &&
+    typeof value.ok === "boolean" &&
+    typeof value.generationId === "string" &&
+    (value.status === "running" || value.status === "completed" || value.status === "failed" || value.status === "aborted") &&
+    (value.message === undefined || typeof value.message === "string")
+  );
+}
+
+export function isAgentEvent(value: unknown): value is AgentEvent {
+  if (
+    !(
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.ts === "string" &&
@@ -66,8 +134,16 @@ export function isAgentEvent(value: unknown): value is AgentEvent {
     typeof value.severity === "string" &&
     SEVERITIES.has(value.severity as AgentEventSeverity) &&
     (value.sessionId === undefined || typeof value.sessionId === "string") &&
-    (value.generationId === undefined || typeof value.generationId === "string")
-  );
+      (value.generationId === undefined || typeof value.generationId === "string") &&
+      "payload" in value
+    )
+  ) {
+    return false;
+  }
+  if (value.type === "content_delta") {
+    return isContentDeltaPayload(value.payload);
+  }
+  return true;
 }
 
 export function isActionSubmitResponse(value: unknown): value is ActionSubmitResponse {
@@ -101,6 +177,74 @@ function isChatSession(value: unknown): value is ChatSession {
     typeof value.created_at === "string" &&
     typeof value.updated_at === "string"
   );
+}
+
+function isChatMessage(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    (value.role === "user" || value.role === "assistant") &&
+    typeof value.content === "string" &&
+    (typeof value.generationId === "string" || value.generationId === null) &&
+    (value.status === "completed" || value.status === "failed" || value.status === "aborted") &&
+    typeof value.createdAt === "string" &&
+    typeof value.updatedAt === "string"
+  );
+}
+
+function isProviderProfileSummary(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.profileId === "string" &&
+    typeof value.providerId === "string" &&
+    typeof value.displayName === "string" &&
+    isProviderProtocol(value.protocol) &&
+    typeof value.enabled === "boolean" &&
+    typeof value.external === "boolean" &&
+    (value.endpointOrigin === undefined || typeof value.endpointOrigin === "string") &&
+    (value.apiKeyEnvName === undefined || typeof value.apiKeyEnvName === "string") &&
+    typeof value.keyConfigured === "boolean" &&
+    Array.isArray(value.models) &&
+    value.models.every(isProviderModelSummary)
+  );
+}
+
+function isProviderModelSummary(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.modelId === "string" &&
+    typeof value.displayName === "string" &&
+    (value.contextWindow === undefined || typeof value.contextWindow === "number") &&
+    (value.maxOutputTokens === undefined || typeof value.maxOutputTokens === "number") &&
+    Array.isArray(value.reasoningPresets) &&
+    value.reasoningPresets.every(isReasoningPreset) &&
+    isReasoningPreset(value.defaultReasoningPreset) &&
+    typeof value.reasoningFixed === "boolean"
+  );
+}
+
+function isProviderProtocol(value: unknown): boolean {
+  return value === "dry-run" || value === "openai-chat-completions";
+}
+
+function isProviderConnectionState(value: unknown): boolean {
+  return value === "dry_run" || value === "unconfigured" || value === "configured_unverified" || value === "connected" || value === "error" || value === "disabled";
+}
+
+function isReasoningPreset(value: unknown): value is ReasoningPreset {
+  return value === "off" || value === "low" || value === "medium" || value === "high" || value === "max";
+}
+
+function isContentDeltaPayload(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.delta !== "string") {
+    return false;
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== "delta" && key !== "partialLength") {
+      return false;
+    }
+  }
+  return value.partialLength === undefined || typeof value.partialLength === "number";
 }
 
 function isStateTimelineItem(value: unknown): boolean {

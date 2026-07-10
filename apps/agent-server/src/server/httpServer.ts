@@ -7,6 +7,7 @@ import { openAgentDatabase, type AgentDatabase } from "../db/connection.js";
 import { EventStore } from "../events/EventStore.js";
 import { handleInboxReviewRoutes } from "../pkos/InboxReviewRoutes.js";
 import { handleStateTimelineRoutes } from "../pkos/StateTimelineRoutes.js";
+import { ProviderProfileRegistry } from "../providers/registry/ProviderProfileRegistry.js";
 import { GenerationManager } from "../runtime/GenerationManager.js";
 import { AgentRunner } from "../runtime/AgentRunner.js";
 import { ToolExecutor } from "../tools/ToolExecutor.js";
@@ -24,7 +25,7 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
   const events = new EventStore(db);
   const generations = new GenerationManager(db, events);
   const contextBuilder = new ContextBuilder(db);
-  const runner = new AgentRunner(db, generations, undefined, events, contextBuilder);
+  const runner = new AgentRunner(db, generations, new ProviderProfileRegistry(), events, contextBuilder);
   const registry = createDefaultToolRegistry();
   const writebackRouter = new WritebackRouter();
   const toolExecutor = new ToolExecutor(db, registry, writebackRouter, events);

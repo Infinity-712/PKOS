@@ -14,7 +14,12 @@
     "audit-api-smoke": "tsx src/scripts/auditApiSmoke.ts",
     "inbox-review-api-smoke": "tsx src/scripts/inboxReviewApiSmoke.ts",
     "state-timeline-api-smoke": "tsx src/scripts/stateTimelineApiSmoke.ts",
-    "cors-smoke": "tsx src/scripts/corsSmoke.ts"
+    "cors-smoke": "tsx src/scripts/corsSmoke.ts",
+    "llm-readonly-smoke": "tsx src/scripts/llmReadonlySmoke.ts",
+    "provider-config": "tsx src/scripts/providerConfig.ts",
+    "provider-config-smoke": "tsx src/scripts/providerConfigSmoke.ts",
+    "provider-profile-smoke": "tsx src/scripts/providerProfileSmoke.ts",
+    "chat-history-smoke": "tsx src/scripts/chatHistorySmoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

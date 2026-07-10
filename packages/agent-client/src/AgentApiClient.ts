@@ -1,14 +1,34 @@
-import { isActionSubmitResponse, isAgentEvent, isApiErrorPayload, isChatSessionListResponse, isCreateChatSessionResponse, isHealthResponse, isRecord, isStateTimelineResponse } from "./guards.js";
+import {
+  isAbortGenerationResponse,
+  isActionSubmitResponse,
+  isAgentEvent,
+  isApiErrorPayload,
+  isChatMessageListResponse,
+  isChatSessionListResponse,
+  isCreateChatSessionResponse,
+  isHealthResponse,
+  isProviderStatusResponse,
+  isProviderProfilesResponse,
+  isRecord,
+  isStateTimelineResponse,
+} from "./guards.js";
 import { parseNdjsonStream } from "./NdjsonStreamParser.js";
 import type {
   ActionSubmitResponse,
+  AbortGenerationResponse,
   AgentEvent,
+  ChatMessageListResponse,
   ChatSessionListResponse,
   CreateChatSessionResponse,
+  GetSessionMessagesOptions,
   HealthDiagnosticsResponse,
   HealthResponse,
   InboxAppendRequest,
   JsonObject,
+  ProviderStatusResponse,
+  ProviderProfilesResponse,
+  SetProviderSelectionInput,
+  SendChatMessageInput,
   StateAppendRequest,
   StateTimelineFilters,
   StateTimelineResponse,
@@ -59,6 +79,34 @@ export class AgentApiClient {
     return this.get("/api/chat/sessions", isChatSessionListResponse, signal);
   }
 
+  getSessionMessages(sessionId: string, options: GetSessionMessagesOptions = {}, signal?: AbortSignal): Promise<ChatMessageListResponse> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) {
+      params.set("limit", String(options.limit));
+    }
+    if (options.before !== undefined) {
+      params.set("before", options.before);
+    }
+    const query = params.toString();
+    return this.get(`/api/chat/sessions/${encodeURIComponent(sessionId)}/messages${query ? `?${query}` : ""}`, isChatMessageListResponse, signal);
+  }
+
+  listChatMessages(sessionId: string, signal?: AbortSignal): Promise<ChatMessageListResponse> {
+    return this.getSessionMessages(sessionId, {}, signal);
+  }
+
+  getProviderStatus(signal?: AbortSignal): Promise<ProviderStatusResponse> {
+    return this.get("/api/chat/provider-status", isProviderStatusResponse, signal);
+  }
+
+  getProviderProfiles(signal?: AbortSignal): Promise<ProviderProfilesResponse> {
+    return this.get("/api/chat/provider-profiles", isProviderProfilesResponse, signal);
+  }
+
+  setProviderSelection(input: SetProviderSelectionInput, signal?: AbortSignal): Promise<ProviderStatusResponse> {
+    return this.post("/api/chat/provider-selection", input, isProviderStatusResponse, signal);
+  }
+
   inboxAppend(input: InboxAppendRequest, signal?: AbortSignal): Promise<ActionSubmitResponse> {
     return this.post("/api/actions/inbox-append", input, isActionSubmitResponse, signal);
   }
@@ -85,7 +133,11 @@ export class AgentApiClient {
     return this.get(`/api/pkos/state-timeline${query ? `?${query}` : ""}`, isStateTimelineResponse, signal);
   }
 
-  async *sendChatMessage(input: { sessionId: string; message: string }, signal?: AbortSignal): AsyncGenerator<AgentEvent> {
+  abortGeneration(generationId: string, signal?: AbortSignal): Promise<AbortGenerationResponse> {
+    return this.post(`/api/chat/generations/${encodeURIComponent(generationId)}/abort`, {}, isAbortGenerationResponse, signal);
+  }
+
+  async *sendChatMessage(input: SendChatMessageInput, signal?: AbortSignal): AsyncGenerator<AgentEvent> {
     let response: Response;
     try {
       response = await this.fetchImpl(this.url("/api/chat/send"), {

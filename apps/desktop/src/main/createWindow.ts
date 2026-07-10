@@ -19,6 +19,7 @@ const startupStates = new WeakMap<BrowserWindow, WindowStartupState>();
 
 export type MainWindowOptions = {
   connectivityProbe?: boolean;
+  chatHistoryConnectivityProbe?: boolean;
   onConnectivityProbeMessage?: (message: string) => void;
 };
 
@@ -99,7 +100,11 @@ export async function createMainWindow(options: MainWindowOptions = {}): Promise
   if (devUrl) {
     await loadRenderer(win, "url", devUrl);
   } else {
-    const entryUrl = options.connectivityProbe ? `${desktopAppEntryUrl}?pkos-connectivity-probe=1` : desktopAppEntryUrl;
+    const entryUrl = options.chatHistoryConnectivityProbe
+      ? `${desktopAppEntryUrl}?pkos-chat-history-connectivity-probe=1`
+      : options.connectivityProbe
+        ? `${desktopAppEntryUrl}?pkos-connectivity-probe=1`
+        : desktopAppEntryUrl;
     await loadRenderer(win, "url", entryUrl);
   }
   return win;

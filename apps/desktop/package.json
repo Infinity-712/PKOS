@@ -9,6 +9,10 @@
     "check": "tsc --noEmit && tsc -p tsconfig.main.json --noEmit",
     "build": "tsc -p tsconfig.main.json && vite build",
     "smoke": "tsx src/scripts/smoke.ts",
+    "chat-stream-probe": "tsx src/scripts/chatStreamProbe.ts",
+    "chat-restart-restore-smoke": "tsx src/scripts/chatRestartRestoreSmoke.ts",
+    "chat-history-retry-smoke": "tsx src/scripts/chatHistoryRetrySmoke.ts",
+    "chat-history-connectivity-probe": "electron . --pkos-chat-history-connectivity-probe",
     "window-probe": "electron . --pkos-window-probe",
     "connectivity-probe": "electron . --pkos-connectivity-probe"
   },

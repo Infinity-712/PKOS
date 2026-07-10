@@ -140,7 +140,7 @@ textarea {
   text-align: left;
 }
 
-.event-stream {
+.message-stream {
   min-height: 260px;
   max-height: 420px;
   overflow: auto;
@@ -150,19 +150,127 @@ textarea {
   background: #fbfcfb;
 }
 
-.event-row {
+.message-stream {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.message-row {
+  display: grid;
+  gap: 4px;
+  max-width: 78%;
+}
+
+.message-row.user {
+  justify-self: end;
+}
+
+.message-row.assistant {
+  justify-self: start;
+}
+
+.message-meta {
   display: flex;
-  gap: 8px;
   align-items: center;
-  border-bottom: 1px solid #e8ece9;
-  padding: 7px 0;
+  gap: 7px;
+  color: #526058;
+  font-size: 12px;
+}
+
+.message-row.user .message-meta {
+  justify-content: flex-end;
+}
+
+.message-bubble {
+  margin: 0;
+  border: 1px solid #cfd8d1;
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: #ffffff;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message-row.user .message-bubble {
+  background: #e7f0ff;
+  border-color: #bdd0f5;
+}
+
+.message-row.assistant .message-bubble {
+  background: #f4f8f5;
+  border-color: #c8dacd;
+}
+
+.session-header {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  border: 1px solid #dde3df;
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 10px;
+}
+
+.session-header div {
+  min-width: 0;
+}
+
+.session-header dt {
+  color: #526058;
+  font-size: 12px;
+}
+
+.session-header dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
 }
 
 .composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: end;
+}
+
+.composer button {
+  justify-self: end;
+}
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #374151;
+  font-size: 13px;
+}
+
+.consent-row input {
+  width: auto;
+  margin-top: 2px;
+}
+
+.provider-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(180px, 0.7fr);
+  gap: 10px;
+}
+
+.provider-controls label {
+  display: grid;
+  gap: 4px;
+  color: #526058;
+  font-size: 13px;
+}
+
+.provider-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  color: #526058;
+  font-size: 13px;
 }
 
 .kv-list {
@@ -237,7 +345,8 @@ textarea {
   .page-grid.two-column,
   .split-page,
   .compact-grid,
-  .composer,
+  .session-header,
+  .provider-controls,
   .kv-list {
     grid-template-columns: 1fr;
   }

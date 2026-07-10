@@ -68,7 +68,7 @@ try {
   const runner = new AgentRunner(db, generations, undefined, events, builder);
   const result = await runner.run({ sessionId: currentSession.id, message: "context integration smoke" });
   assert(result.events.some((event) => event.type === "context_built"), "AgentRunner did not emit context_built");
-  assert(result.assistantMessage.indexOf("Context items:") !== -1, "dry-run response did not include context summary");
+  assert(result.assistantMessage.indexOf("Prompt messages:") !== -1, "dry-run response did not include prompt summary");
 
   const latestGeneration = db.prepare("SELECT status FROM generations ORDER BY created_at DESC LIMIT 1").get() as GenerationRow;
   assert(latestGeneration.status === "completed", "latest generation was not completed");

@@ -1,22 +1,25 @@
-import type { BuiltContext } from "../context/ContextTypes.js";
+import type { AgentProvider, ProviderDelta, ProviderRequest } from "./ProviderTypes.js";
 
-export type DryRunRequest = {
-  sessionId: string;
-  userMessage: string;
-  context: BuiltContext;
-};
+export class DryRunProvider implements AgentProvider {
+  readonly protocol = "dry-run" as const;
+  readonly providerId = "dry-run";
+  readonly profileId = "dry-run";
+  readonly modelId = "dry-run";
+  readonly reasoningPreset = "off" as const;
+  readonly dataEgress = "none" as const;
 
-export class DryRunProvider {
-  async *stream(request: DryRunRequest): AsyncGenerator<string> {
-    const safeMessage = request.userMessage.replace(/\s+/g, " ").trim();
+  async *stream(request: ProviderRequest): AsyncGenerator<ProviderDelta> {
+    const latestUser = [...request.messages].reverse().find((message) => message.role === "user");
+    const safeMessage = (latestUser?.content ?? "").replace(/\s+/g, " ").trim();
     const response =
       "Received. This is the dry-run PKOS agent server skeleton. " +
       "No external API, RAG, tool, or authority write was called. " +
-      `Context items: ${request.context.items.length}; warnings: ${request.context.warnings.length}. ` +
+      `Prompt messages: ${request.messages.length}. ` +
       `You said: ${safeMessage}`;
     for (const chunk of chunkText(response, 48)) {
-      yield chunk;
+      yield { type: "content_delta", text: chunk };
     }
+    yield { type: "completed", finishReason: "dry-run" };
   }
 }
 

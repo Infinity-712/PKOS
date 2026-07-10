@@ -20,7 +20,8 @@ import {
 let mainWindow: BrowserWindow | null = null;
 const probeMode = process.argv.includes("--pkos-window-probe");
 const connectivityProbeMode = process.argv.includes("--pkos-connectivity-probe");
-const probeUserDataDir = probeMode || connectivityProbeMode ? mkdtempSync(join(tmpdir(), "pkos-desktop-probe-")) : null;
+const chatHistoryConnectivityProbeMode = process.argv.includes("--pkos-chat-history-connectivity-probe");
+const probeUserDataDir = probeMode || connectivityProbeMode || chatHistoryConnectivityProbeMode ? mkdtempSync(join(tmpdir(), "pkos-desktop-probe-")) : null;
 
 registerDesktopAppScheme();
 if (probeUserDataDir) {
@@ -43,7 +44,7 @@ ipcMain.handle("pkos:open-dashboard", async () => {
   return { opened: true };
 });
 
-async function ensureMainWindow(options: { connectivityProbe?: boolean; onConnectivityProbeMessage?: (message: string) => void } = {}): Promise<void> {
+async function ensureMainWindow(options: { connectivityProbe?: boolean; chatHistoryConnectivityProbe?: boolean; onConnectivityProbeMessage?: (message: string) => void } = {}): Promise<void> {
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) {
       mainWindow.restore();
@@ -56,6 +57,7 @@ async function ensureMainWindow(options: { connectivityProbe?: boolean; onConnec
 
   mainWindow = await createMainWindow({
     connectivityProbe: options.connectivityProbe,
+    chatHistoryConnectivityProbe: options.chatHistoryConnectivityProbe,
     onConnectivityProbeMessage: options.onConnectivityProbeMessage,
   });
 
@@ -71,8 +73,8 @@ async function bootstrap(): Promise<void> {
   installAppDiagnostics();
   installDesktopAppSchemeHandler();
   installSessionSecurityPolicy();
-  if (connectivityProbeMode) {
-    await runConnectivityProbe();
+  if (connectivityProbeMode || chatHistoryConnectivityProbeMode) {
+    await runConnectivityProbe(chatHistoryConnectivityProbeMode ? "chat-history" : "connectivity");
     return;
   }
   await ensureMainWindow();
@@ -138,10 +140,11 @@ async function runWindowProbe(): Promise<void> {
   app.exit(0);
 }
 
-async function runConnectivityProbe(): Promise<void> {
-  const result = createConnectivityProbeResult();
+async function runConnectivityProbe(mode: "connectivity" | "chat-history"): Promise<void> {
+  const result = createConnectivityProbeResult(mode);
   await ensureMainWindow({
-    connectivityProbe: true,
+    connectivityProbe: mode === "connectivity",
+    chatHistoryConnectivityProbe: mode === "chat-history",
     onConnectivityProbeMessage: result.onConsoleMessage,
   });
   try {
@@ -159,7 +162,7 @@ async function runConnectivityProbe(): Promise<void> {
   }
 }
 
-function createConnectivityProbeResult(): { done: Promise<void>; onConsoleMessage: (message: string) => void } {
+function createConnectivityProbeResult(mode: "connectivity" | "chat-history"): { done: Promise<void>; onConsoleMessage: (message: string) => void } {
   let settled = false;
   let resolveDone!: () => void;
   let rejectDone!: (error: Error) => void;
@@ -180,12 +183,14 @@ function createConnectivityProbeResult(): { done: Promise<void>; onConsoleMessag
       if (settled) {
         return;
       }
-      if (message.startsWith("DESKTOP_CONNECTIVITY_PROBE_OK")) {
+      const okMarker = mode === "chat-history" ? "DESKTOP_CHAT_HISTORY_CONNECTIVITY_PROBE_OK" : "DESKTOP_CONNECTIVITY_PROBE_OK";
+      const failedMarker = mode === "chat-history" ? "DESKTOP_CHAT_HISTORY_CONNECTIVITY_PROBE_FAILED" : "DESKTOP_CONNECTIVITY_PROBE_FAILED";
+      if (message.startsWith(okMarker)) {
         settled = true;
         clearTimeout(timeout);
         console.log(message);
         resolveDone();
-      } else if (message.startsWith("DESKTOP_CONNECTIVITY_PROBE_FAILED")) {
+      } else if (message.startsWith(failedMarker)) {
         settled = true;
         clearTimeout(timeout);
         console.log(message);

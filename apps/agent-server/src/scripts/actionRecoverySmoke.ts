@@ -70,7 +70,7 @@ function testFreshMigration(): void {
   const env = useDataRoot("fresh-v3");
   const db = openAgentDatabase(env);
   try {
-    assertUserVersion(db, 3);
+    assertUserVersion(db, 5);
     assert(tableExists(db, "action_request_resolutions"), "fresh DB missing action_request_resolutions");
   } finally {
     db.close();
@@ -98,7 +98,7 @@ function testVersionTwoMigration(): void {
 
   const migrated = openAgentDatabase(env);
   try {
-    assertUserVersion(migrated, 3);
+    assertUserVersion(migrated, 5);
     assert(tableExists(migrated, "action_request_resolutions"), "version 2 DB did not get resolutions table");
     const row = migrated.prepare("SELECT COUNT(*) AS count FROM action_requests WHERE request_id = ?").get("legacy-action") as CountRow;
     assert(row.count === 1, "version 2 migration lost action request data");
