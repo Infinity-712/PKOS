@@ -24,7 +24,21 @@ import {
   hasStateTimelineMutationAction,
   stateStaleText,
 } from "../features/state/stateModel.js";
-import { isActionRequestListResponse, isAuditEventsResponse, isHealthResponse } from "../lib/guards.js";
+import {
+  allowedTaskTransitions,
+  buildTaskQuery,
+  canSubmitTaskCreate,
+  canSubmitTaskTransition,
+  createTaskCreateDraft,
+  createTaskTransitionDraft,
+  startOrReuseTaskAttempt,
+} from "../features/tasks/taskModel.js";
+import {
+  beijingPartsToUtcIso,
+  formatTaskDueAtBeijing,
+} from "../features/tasks/taskDue.js";
+import { isActionRequestListResponse, isAuditEventsResponse, isHealthResponse, isTaskListResponse } from "../lib/guards.js";
+import { formatDateTime } from "@pkos/agent-client";
 
 const draft: ActionDraft = {
   actionName: "inbox-append",
@@ -166,6 +180,50 @@ assert(!hasStateTimelineMutationAction("delete"), "timeline exposed delete actio
 assert(sourceContains('submitLabel="记录新状态快照"'), "state capture submit label is missing");
 assert(sourceContains("onWritten={() => void refresh()}"), "state capture success is not wired to timeline refresh");
 
+const taskQuery = buildTaskQuery({ status: "open", priority: "high", tag: "alpha", limit: "20", title: "DO_NOT_PUT_TITLE_IN_URL" });
+assert(taskQuery === "status=open&priority=high&tag=alpha&limit=20", "task query builder failed");
+assert(taskQuery.indexOf("title") === -1 && taskQuery.indexOf("DO_NOT_PUT_TITLE_IN_URL") === -1, "task title leaked into query");
+const taskCreateDraft = createTaskCreateDraft({
+  title: "WEB_TASK_TITLE",
+  description: "WEB_TASK_DESCRIPTION",
+  source: "web",
+  tags: ["alpha"],
+  priority: "high",
+  dueAt: "2026-07-12T03:04:05Z",
+});
+const taskCreateAttempt = startOrReuseTaskAttempt(EMPTY_ATTEMPT, taskCreateDraft, () => "task-request-1");
+assert(taskCreateAttempt.frozenPayload?.endpoint === "/api/pkos/tasks", "task create endpoint was not fixed");
+assert(taskCreateAttempt.frozenPayload?.body.title === "WEB_TASK_TITLE", "task create did not freeze title");
+assert(taskCreateAttempt.frozenPayload?.body.confirmed === true, "task create button did not auto-confirm explicit mutation");
+const taskCreateRetry = startOrReuseTaskAttempt(
+  taskCreateAttempt,
+  createTaskCreateDraft({
+    title: "EDITED_TASK_TITLE_SHOULD_NOT_REPLACE_FROZEN_PAYLOAD",
+    description: "edited",
+    source: "web",
+    tags: [],
+    priority: "normal",
+    dueAt: "",
+  }),
+  () => "task-request-2",
+);
+assert(taskCreateRetry.requestId === "task-request-1", "task create retry changed requestId");
+assert(taskCreateRetry.frozenPayload?.body.title === "WEB_TASK_TITLE", "task create retry changed frozen payload");
+assert(canSubmitTaskCreate({ title: "x", description: "", source: "web", tags: [], priority: "normal", dueAt: "" }), "valid task create was not submittable");
+assert(!canSubmitTaskCreate({ title: "", description: "", source: "web", tags: [], priority: "normal", dueAt: "" }), "empty task title was submittable");
+assert(allowedTaskTransitions("open").join(",") === "in_progress,blocked,done,cancelled", "open transition options changed");
+assert(allowedTaskTransitions("done").join(",") === "open", "done transition options changed");
+const transitionDraft = createTaskTransitionDraft({ taskId: "task.1", targetStatus: "done", reason: "finished" });
+const transitionAttempt = startOrReuseTaskAttempt(EMPTY_ATTEMPT, transitionDraft, () => "task-transition-1");
+assert(transitionAttempt.frozenPayload?.endpoint === "/api/pkos/tasks/task.1/transition", "task transition endpoint was not fixed");
+assert(transitionAttempt.frozenPayload?.body.reason === "finished", "task transition did not freeze reason");
+assert(transitionAttempt.frozenPayload?.body.confirmed === true, "task transition button did not auto-confirm explicit mutation");
+assert(canSubmitTaskTransition({ taskId: "task.1", targetStatus: "done", reason: "finished" }), "valid transition was not submittable");
+assert(!canSubmitTaskTransition({ taskId: "task.1", targetStatus: "done", reason: "" }), "empty transition reason was submittable");
+assert(beijingPartsToUtcIso(2026, 7, 15, 18, 0) === "2026-07-15T10:00:00.000Z", "Beijing task due time did not convert to UTC");
+assert(formatTaskDueAtBeijing("2026-07-15T10:00:00.000Z") === "2026-07-15 18:00", "UTC task due time was not shown as Beijing time");
+assert(formatDateTime("2026-07-12T03:04:05Z") === "2026-07-12 11:04:05", "shared time formatter regressed");
+
 assert(isHealthResponse({ ok: true, service: "pkos-agent-server", mode: "dry-run" }), "health guard failed");
 assert(
   isActionRequestListResponse({
@@ -200,6 +258,67 @@ assert(
   }),
   "audit guard failed",
 );
+assert(
+  isTaskListResponse({
+    ok: true,
+    count: 1,
+    generatedAt: "2026-07-11T00:00:00Z",
+    filters: {},
+    items: [
+      {
+        id: "task.1",
+        title: "Task",
+        description: null,
+        status: "open",
+        priority: "normal",
+        source: "web",
+        tags: [],
+        dueAt: null,
+        createdAt: "2026-07-11T00:00:00Z",
+        createdBy: "human",
+        latestActionId: null,
+        latestActionAt: null,
+        latestReason: null,
+        notesCount: 0,
+        latestNoteAt: null,
+      },
+    ],
+    source: {},
+  }),
+  "task list guard failed",
+);
+const unicodeTaskListPayload = {
+  ok: true,
+  count: 1,
+  generatedAt: "2026-07-13T00:00:00Z",
+  filters: {},
+  items: [
+    {
+      id: "task.unicode",
+      title: "中文读取验证：测试任务二",
+      description: "验证 JSONL、Python stdout、Node、HTTP 和 Web 客户端",
+      status: "in_progress",
+      priority: "normal",
+      source: "web",
+      tags: ["unicode"],
+      dueAt: "2026-07-15T10:00:00Z",
+      createdAt: "2026-07-13T00:00:00Z",
+      createdBy: "human",
+      latestActionId: "task_action.unicode",
+      latestActionAt: "2026-07-13T00:01:00Z",
+      latestReason: "开始中文读取链路验收",
+      notesCount: 0,
+      latestNoteAt: null,
+    },
+  ],
+  source: {},
+};
+assert(isTaskListResponse(unicodeTaskListPayload), "unicode task list guard failed");
+const unicodeTaskItem = unicodeTaskListPayload.items[0];
+assert(unicodeTaskItem.title === "中文读取验证：测试任务二", "web task list view model changed Chinese title");
+assert(unicodeTaskItem.description === "验证 JSONL、Python stdout、Node、HTTP 和 Web 客户端", "web task detail view model changed Chinese description");
+assert(unicodeTaskItem.latestReason === "开始中文读取链路验收", "web task detail view model changed Chinese latest reason");
+assert(!JSON.stringify(unicodeTaskListPayload).includes("锟") && !JSON.stringify(unicodeTaskListPayload).includes("�"), "web task payload contains mojibake replacement text");
 
 assert(!sourceContains("localStorage"), "dashboard source must not use localStorage");
 assert(!sourceContains("系统判断你现在"), "dashboard contains diagnostic system-judgment copy");
@@ -208,6 +327,13 @@ assert(!sourceContains("风险评分"), "dashboard contains risk scoring copy");
 assert(!sourceContains("最佳任务是"), "dashboard contains task-reorder copy");
 assert(!sourceContains("更新数据库状态"), "dashboard contains database-overwrite copy");
 assert(!sourceContains("覆盖当前状态"), "dashboard contains state-overwrite copy");
+assert(!sourceContains("AI priority"), "dashboard contains AI task priority copy");
+assert(!sourceContains("Reminder Scheduler"), "dashboard contains reminder scheduler UI copy");
+assert(!sourceContains("I confirm this is a human-created formal task."), "task create confirm checkbox copy still exists");
+assert(!sourceContains("I confirm this explicit transition."), "task transition confirm checkbox copy still exists");
+assert(!sourceContains("task-note"), "task note UI/model path still exists");
+assert(sourceContains("Tasks"), "Tasks tab/page source is missing");
+assert(sourceContains("Agent cannot automatically create, complete, or reorder formal tasks."), "task authority boundary copy is missing");
 console.log("WEB_DASHBOARD_SMOKE_OK");
 
 function sourceContains(pattern: string): boolean {

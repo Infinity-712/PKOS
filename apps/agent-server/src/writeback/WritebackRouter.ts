@@ -1,6 +1,7 @@
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput } from "../tools/builtin/inboxReview.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
+import type { TaskCreateInput, TaskTransitionInput } from "../tools/builtin/taskFlow.js";
 import type { RegisteredToolDefinition, ToolExecutionContext } from "../tools/ToolTypes.js";
 import { PkosCliClient } from "./PkosCliClient.js";
 import { blockedResult, type WritebackResult } from "./WritebackTypes.js";
@@ -10,6 +11,8 @@ const DIRECT_WRITE_TOOLS = new Set([
   "pkos.inbox_review.archive",
   "pkos.inbox_review.restore",
   "pkos.state.append",
+  "pkos.task.create",
+  "pkos.task.transition",
 ]);
 
 export class WritebackRouter {
@@ -42,6 +45,12 @@ export class WritebackRouter {
     }
     if (tool.name === "pkos.state.append") {
       return this.cli.stateAppend(input as StateAppendInput);
+    }
+    if (tool.name === "pkos.task.create") {
+      return this.cli.taskCreate(input as TaskCreateInput);
+    }
+    if (tool.name === "pkos.task.transition") {
+      return this.cli.taskTransition(input as TaskTransitionInput);
     }
 
     return Promise.resolve(

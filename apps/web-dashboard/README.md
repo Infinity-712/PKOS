@@ -4,7 +4,9 @@
 
 The dashboard is a private local UI for Agent Runtime operations and recovery. It talks to the Agent Server by same-origin `/api` and `/health` requests during development through the Vite proxy.
 
-It does not implement real LLM calls, Agent tool selection, RAG, memory, task or reminder scheduling, object management, trusted migration, object conversion, OpenClaw, WeChat, Electron, mobile, or production static hosting.
+It does not implement real LLM calls, Agent tool selection, RAG, memory,
+reminder scheduling, object management, trusted migration, object conversion,
+OpenClaw, WeChat, Electron, mobile, or production static hosting.
 
 Common browser-safe API types, guards, fetch helpers, NDJSON parsing, and request attempt state now live in `packages/agent-client`. Web-only management surfaces such as Inbox Review, Action Requests, and Audit keep their local model code and behavior boundaries unchanged.
 
@@ -49,6 +51,7 @@ http://127.0.0.1:5173
 - Capture: fixed Action API forms for `inbox-append` and `state-append`.
 - State: Current State card, explicit new state snapshot form, and append-only state timeline.
 - Inbox Review: local human review for `archive` and `restore` through fixed API endpoints.
+- Tasks: local human management for formal task create/list/detail/status transitions through fixed API endpoints.
 - Action Requests: idempotency/recovery list, detail view, and human resolution for indeterminate requests.
 - Audit: read-only `agent_events` view through sanitized payload summaries.
 
@@ -94,11 +97,63 @@ Archive copy uses `归档`, not delete language. Restore copy uses `恢复为待
 
 Each mutation requires a reason and explicit checkbox confirmation. The first submit creates a `requestId` and freezes the payload in memory. If the network result is unknown, retry reuses the same `requestId` and frozen payload. If the reason changes, use `新建请求` before submitting the new reason.
 
-Converted items are read-only in this version: “该条目已被标记为 converted。本版本不验证或创建转换目标。” The dashboard cannot create new converted status or conversion targets.
+Converted items are read-only in this version: `该条目已被标记为 converted。本版本不验证或创建转换目标。` The dashboard cannot create new converted status or conversion targets.
 
 The page does not provide batch archive, inbox-zero pressure copy, object creation, task creation, content editing, deletion, or generic mark/status controls.
 
 Inbox content is shown for local human review, but the dashboard does not persist capture content or review reasons in `localStorage`.
+
+## Tasks Contract
+
+The Tasks page manages formal tasks through explicit human actions. Task
+authority remains under `PKOS_DATA_ROOT`:
+
+- `tasks/items.jsonl`
+- `tasks/actions.jsonl`
+- `runtime/tasks/current.json` as a rebuildable derived view
+
+The page uses fixed endpoints:
+
+- `GET /api/pkos/tasks`
+- `GET /api/pkos/tasks/:taskId`
+- `POST /api/pkos/tasks`
+- `POST /api/pkos/tasks/:taskId/transition`
+
+Task creation and status transitions require a filled title/reason and a click
+on an explicitly named mutation button. There is no extra task confirmation
+checkbox: clicking Create Task or Apply Transition is the human UI
+confirmation. The request body still includes `confirmed: true`, and the server
+continues to reject direct API calls with `confirmed: false`.
+
+The first submit freezes one `requestId` and payload in memory; retry reuses
+that exact request. Editing fields after submit does not alter the frozen retry
+payload. Use `New Request` to intentionally start over.
+
+The page does not infer tasks from Inbox, auto-prioritize, auto-create due
+dates, schedule reminders, batch complete, drag reorder, call an Agent, create
+task notes, or write task JSONL files directly. Full task
+titles/descriptions/reasons may be shown in the localhost UI for the human
+operator, but they are not placed in URL query parameters, `localStorage`,
+generic SQLite audit payloads, or Agent event payloads.
+
+Due Picker behavior:
+
+- all user-facing task due input and display uses Beijing time;
+- authority storage and API payloads remain UTC ISO strings;
+- time choices are fixed to 30-minute intervals from `00:00` through `23:30`;
+- quick dates are Today, Tomorrow, Next week, and Next month using Beijing
+  calendar semantics;
+- Next month clamps to the target month end when needed;
+- closing the picker without confirming does not change the form;
+- clearing due sets `dueAt` to `null`;
+- due time does not create reminder or repeat data.
+
+Example:
+
+```text
+Displayed/input: 2026-07-15 18:00
+API/authority: 2026-07-15T10:00:00.000Z
+```
 
 ## Verification
 

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "rootDir": "src",
+    "outDir": "dist-task-due-picker-smoke",
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src/scripts/taskDuePickerSmoke.ts",
+    "src/features/tasks/**/*.ts",
+    "src/features/tasks/**/*.tsx"
+  ]
+}

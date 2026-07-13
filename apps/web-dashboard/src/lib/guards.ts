@@ -13,6 +13,8 @@ import type {
   AuditEventView,
   AuditEventsResponse,
   InboxReviewListResponse,
+  TaskItem,
+  TaskListResponse,
   WritebackResult,
 } from "../types.js";
 
@@ -55,6 +57,19 @@ export function isInboxReviewListResponse(value: unknown): value is InboxReviewL
     typeof value.count === "number" &&
     typeof value.generatedAt === "string" &&
     isRecord(value.filters)
+  );
+}
+
+export function isTaskListResponse(value: unknown): value is TaskListResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    Array.isArray(value.items) &&
+    value.items.every(isTaskItem) &&
+    typeof value.count === "number" &&
+    typeof value.generatedAt === "string" &&
+    isRecord(value.filters) &&
+    isRecord(value.source)
   );
 }
 
@@ -118,6 +133,28 @@ function isInboxReviewItem(value: unknown): boolean {
     typeof value.createdAt === "string" &&
     typeof value.effectiveStatus === "string" &&
     (value.latestAction === null || isLatestInboxReviewAction(value.latestAction))
+  );
+}
+
+function isTaskItem(value: unknown): value is TaskItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    (typeof value.description === "string" || value.description === null) &&
+    typeof value.status === "string" &&
+    typeof value.priority === "string" &&
+    typeof value.source === "string" &&
+    Array.isArray(value.tags) &&
+    value.tags.every((tag) => typeof tag === "string") &&
+    (typeof value.dueAt === "string" || value.dueAt === null) &&
+    typeof value.createdAt === "string" &&
+    typeof value.createdBy === "string" &&
+    (typeof value.latestActionId === "string" || value.latestActionId === null) &&
+    (typeof value.latestActionAt === "string" || value.latestActionAt === null) &&
+    (typeof value.latestReason === "string" || value.latestReason === null) &&
+    typeof value.notesCount === "number" &&
+    (typeof value.latestNoteAt === "string" || value.latestNoteAt === null)
   );
 }
 

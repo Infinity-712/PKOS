@@ -7,7 +7,8 @@
     "dev": "vite --host 127.0.0.1 --port 5173",
     "check": "tsc --noEmit",
     "build": "vite build",
-    "smoke": "tsc -p tsconfig.smoke.json && node dist-smoke/scripts/smoke.js"
+    "smoke": "tsc -p tsconfig.smoke.json && node dist-smoke/scripts/smoke.js",
+    "task-due-picker-smoke": "tsc -p tsconfig.task-due-picker-smoke.json && node dist-task-due-picker-smoke/scripts/taskDuePickerSmoke.js"
   },
   "dependencies": {
     "@pkos/agent-client": "file:../../packages/agent-client",

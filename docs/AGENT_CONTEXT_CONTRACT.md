@@ -268,6 +268,47 @@ Rules:
 - future task flow should be managed mainly by Web/App;
 - Moonlolo may later provide low-friction task traversal after task authority exists.
 
+## 8.1 v0.7-alpha task_summary Extension
+
+v0.7-alpha introduces formal task authority, but ordinary Agent context still
+must not include full task content by default.
+
+Generic Flow Hub context may include a bounded `task_summary`:
+
+```json
+{
+  "counts": {
+    "open": 0,
+    "in_progress": 0,
+    "blocked": 0,
+    "done": 0,
+    "cancelled": 0,
+    "overdue": 0
+  },
+  "next_due_at": null,
+  "stale": false,
+  "source": {
+    "authority": "tasks/items.jsonl + tasks/actions.jsonl",
+    "items_count": 0,
+    "actions_count": 0,
+    "items_sha256": "...",
+    "actions_sha256": "..."
+  }
+}
+```
+
+Rules:
+
+- `task_summary` is runtime cache, not task authority.
+- It must not include full task titles, descriptions, transition reasons, or
+  notes by default.
+- It may guide gentle awareness only; it must not create, complete, prioritize,
+  reorder, schedule, or infer tasks.
+- Formal task writes require explicit human confirmation through fixed L2
+  interfaces.
+- The Moonlolo v0.5-beta `task_flow_stub` may remain disabled until a separate
+  Moonlolo task traversal design replaces it.
+
 ## 9. write_policy
 
 `write_policy` must be explicit in the context pack.
@@ -303,7 +344,7 @@ Forbidden:
 
 - write trusted status;
 - write `objects/`;
-- create tasks automatically;
+- create or mutate tasks automatically;
 - generate authority weekly summary without Inbox Review;
 - mutate raw vault;
 - read secrets;

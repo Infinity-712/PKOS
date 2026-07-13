@@ -6,14 +6,16 @@ import { CapturePage } from "./pages/CapturePage.js";
 import { InboxReviewPage } from "./pages/InboxReviewPage.js";
 import { OverviewPage } from "./pages/OverviewPage.js";
 import { StatePage } from "./pages/StatePage.js";
+import { TasksPage } from "./pages/TasksPage.js";
 
-type TabId = "overview" | "capture" | "state" | "inboxReview" | "actions" | "audit";
+type TabId = "overview" | "capture" | "state" | "inboxReview" | "tasks" | "actions" | "audit";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "capture", label: "Capture" },
   { id: "state", label: "State" },
   { id: "inboxReview", label: "Inbox Review" },
+  { id: "tasks", label: "Tasks" },
   { id: "actions", label: "Action Requests" },
   { id: "audit", label: "Audit" },
 ];
@@ -43,6 +45,7 @@ export function App() {
       {tab === "capture" ? <CapturePage /> : null}
       {tab === "state" ? <StatePage /> : null}
       {tab === "inboxReview" ? <InboxReviewPage /> : null}
+      {tab === "tasks" ? <TasksPage /> : null}
       {tab === "actions" ? <ActionRequestsPage /> : null}
       {tab === "audit" ? <AuditPage /> : null}
     </main>

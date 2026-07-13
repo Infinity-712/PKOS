@@ -1,6 +1,12 @@
 import type { ActionSubmitResponse, JsonObject } from "./types.js";
 
-export type CaptureActionName = "inbox-append" | "state-append" | "inbox-review-archive" | "inbox-review-restore";
+export type CaptureActionName =
+  | "inbox-append"
+  | "state-append"
+  | "inbox-review-archive"
+  | "inbox-review-restore"
+  | "task-create"
+  | "task-transition";
 
 export type ActionAttemptStatus =
   | "draft"
@@ -113,6 +119,12 @@ function endpointForAction(draft: ActionDraft): string {
   if (draft.actionName === "inbox-review-restore" && typeof draft.body.itemId === "string") {
     return `/api/pkos/inbox-review/${encodeURIComponent(draft.body.itemId)}/restore`;
   }
+  if (draft.actionName === "task-create") {
+    return "/api/pkos/tasks";
+  }
+  if (draft.actionName === "task-transition" && typeof draft.body.taskId === "string") {
+    return `/api/pkos/tasks/${encodeURIComponent(draft.body.taskId)}/transition`;
+  }
   return "/api/actions/invalid";
 }
 
@@ -136,7 +148,19 @@ function statusFromErrorCode(code: string): ActionAttemptStatus {
   if (code === "network_unknown") {
     return "network_unknown";
   }
-  if (code === "invalid_input" || code === "invalid_json" || code === "body_too_large") {
+  if (
+    code === "invalid_input" ||
+    code === "invalid_json" ||
+    code === "body_too_large" ||
+    code === "invalid_transition" ||
+    code === "invalid_status" ||
+    code === "invalid_due_at" ||
+    code === "invalid_priority" ||
+    code === "invalid_title" ||
+    code === "invalid_reason" ||
+    code === "invalid_note" ||
+    code === "task_not_found"
+  ) {
     return "invalid_input";
   }
   if (code === "idempotency_conflict") {

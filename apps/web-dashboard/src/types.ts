@@ -97,3 +97,30 @@ export type InboxReviewListResponse = {
   generatedAt: string;
   filters: JsonObject;
 };
+
+export type TaskItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  status: string;
+  priority: string;
+  source: string;
+  tags: string[];
+  dueAt: string | null;
+  createdAt: string;
+  createdBy: string;
+  latestActionId: string | null;
+  latestActionAt: string | null;
+  latestReason: string | null;
+  notesCount: number;
+  latestNoteAt: string | null;
+};
+
+export type TaskListResponse = {
+  ok: boolean;
+  items: TaskItem[];
+  count: number;
+  generatedAt: string;
+  filters: JsonObject;
+  source: JsonObject;
+};

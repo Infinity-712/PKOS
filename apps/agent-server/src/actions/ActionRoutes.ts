@@ -51,6 +51,9 @@ const MAX_REQUEST_ID_CHARS = 128;
 const MAX_REFERENCE_CHARS = 128;
 const MAX_CONTENT_CHARS = 16 * 1024;
 const MAX_NOTE_CHARS = 8 * 1024;
+const MAX_TITLE_CHARS = 200;
+const MAX_DESCRIPTION_CHARS = 4000;
+const MAX_REASON_CHARS = 4000;
 const MAX_TAGS = 20;
 const MAX_TAG_CHARS = 64;
 const MAX_METADATA_JSON_CHARS = 4096;
@@ -86,6 +89,20 @@ const ACTIONS: ActionConfig[] = [
     pathname: "/api/actions/state-append",
     allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "energy", "mood", "body", "context", "mode", "risk", "source", "note"]),
     normalize: normalizeStateAppend,
+  },
+  {
+    actionName: "pkos.task.create",
+    toolName: "pkos.task.create",
+    pathname: "/api/pkos/tasks",
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "title", "description", "source", "tags", "priority", "dueAt", "createdBy"]),
+    normalize: normalizeTaskCreate,
+  },
+  {
+    actionName: "pkos.task.transition",
+    toolName: "pkos.task.transition",
+    match: matchTaskTransition,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "targetStatus", "reason", "createdBy"]),
+    normalize: normalizeTaskTransition,
   },
 ];
 
@@ -362,6 +379,39 @@ function normalizeInboxReviewAction(input: Record<string, unknown>, routeParams:
   };
 }
 
+function normalizeTaskCreate(input: Record<string, unknown>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      title: limitedString(input.title, "title", { required: true, maxChars: MAX_TITLE_CHARS }),
+      description: limitedString(input.description, "description", { required: false, maxChars: MAX_DESCRIPTION_CHARS }),
+      source: input.source,
+      tags: normalizeTags(input.tags),
+      priority: input.priority,
+      dueAt: limitedString(input.dueAt, "dueAt", { required: false, maxChars: MAX_REFERENCE_CHARS }),
+      createdBy: limitedString(input.createdBy, "createdBy", { required: false, maxChars: MAX_REFERENCE_CHARS }),
+    },
+  };
+}
+
+function normalizeTaskTransition(input: Record<string, unknown>, routeParams: Record<string, string>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      taskId: routeParams.taskId,
+      targetStatus: input.targetStatus,
+      reason: limitedString(input.reason, "reason", { required: true, maxChars: MAX_REASON_CHARS }),
+      createdBy: limitedString(input.createdBy, "createdBy", { required: false, maxChars: MAX_REFERENCE_CHARS }),
+    },
+  };
+}
+
 function normalizeBase(input: Record<string, unknown>): Omit<ActionRequest, "toolInput"> {
   const requestId = limitedString(input.requestId, "requestId", { required: true, maxChars: MAX_REQUEST_ID_CHARS });
   return {
@@ -490,6 +540,17 @@ function statusForResult(result: WritebackResult): number {
   if (result.errorCode === "invalid_input") {
     return 400;
   }
+  if (
+    result.errorCode === "invalid_transition" ||
+    result.errorCode === "invalid_status" ||
+    result.errorCode === "invalid_due_at" ||
+    result.errorCode === "invalid_priority" ||
+    result.errorCode === "invalid_title" ||
+    result.errorCode === "invalid_reason" ||
+    result.errorCode === "task_not_found"
+  ) {
+    return 400;
+  }
   if (result.errorCode === "timeout") {
     return 504;
   }
@@ -598,4 +659,9 @@ function matchInboxReviewArchive(pathname: string): Record<string, string> | nul
 function matchInboxReviewRestore(pathname: string): Record<string, string> | null {
   const match = /^\/api\/pkos\/inbox-review\/([^/]+)\/restore$/.exec(pathname);
   return match ? { inboxId: decodeURIComponent(match[1]) } : null;
+}
+
+function matchTaskTransition(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/tasks\/([^/]+)\/transition$/.exec(pathname);
+  return match ? { taskId: decodeURIComponent(match[1]) } : null;
 }

@@ -111,6 +111,10 @@ python -m tools.pkos state-list --json
 python -m tools.pkos gen-flow
 python -m tools.pkos export-agent-context
 python -m tools.pkos export-site-data
+python -m tools.pkos task-create --title "..." --source manual --request-id "..."
+python -m tools.pkos task-list --json
+python -m tools.pkos task-transition --task-id task_... --target-status in_progress --reason "..."
+python -m tools.pkos task-rebuild --json
 ```
 
 `gen-flow` 会生成 `runtime/flow/*.json`。`export-agent-context` 会生成 `runtime/agent_context.json`，供月洛洛读取。二者都是只读派生命令，不修改 `objects/`、`docs/`、schema 或 trusted 状态。
@@ -119,6 +123,31 @@ python -m tools.pkos export-site-data
 
 - `inbox/items.jsonl`
 - `state/snapshots.jsonl`
+
+`task-create`、`task-transition` 与 `task-rebuild` 是 v0.7-alpha 的正式任务人工管理入口。它们只写入 append-only task authority logs，并生成可重建派生视图：
+
+- `tasks/items.jsonl`
+- `tasks/actions.jsonl`
+- `runtime/tasks/current.json`
+
+Tasks 不是提醒系统，不是 Agent memory，也不是 LLM 自动抽取结果。Node/Web 调用必须走固定、显式确认的 API，并由 Python CLI 写入；不得直接编辑 task JSONL。
+当前版本不再提供新的 task note 写入口；任务说明使用 `description` 字段。历史 `note_added` action 只作为 alpha legacy event 被 rebuild 容忍，不会在 Web 中新增或编辑。
+`dueAt` 在 authority 中始终保存为 UTC ISO，Web 创建和显示统一使用北京时间，时间粒度为 30 分钟。
+
+PowerShell 变量只属于当前 shell session。人工验收 task authority 时，推荐重新读取 runtime profile，而不是假设 `$acceptanceRoot` 仍存在：
+
+```powershell
+$profilePath = Join-Path (Get-Location) "runtime\local\runtime-profile.json"
+if (-not (Test-Path $profilePath)) { throw "RUNTIME_PROFILE_NOT_FOUND: $profilePath" }
+$profile = Get-Content $profilePath -Raw -Encoding UTF8 | ConvertFrom-Json
+$acceptanceRoot = [string]$profile.dataRoot
+if ([string]::IsNullOrWhiteSpace($acceptanceRoot)) { throw "PKOS_DATA_ROOT_EMPTY_IN_RUNTIME_PROFILE" }
+if (-not (Test-Path $acceptanceRoot)) { throw "PKOS_DATA_ROOT_NOT_FOUND: $acceptanceRoot" }
+$taskRoot = Join-Path $acceptanceRoot "tasks"
+$currentView = Join-Path $acceptanceRoot "runtime\tasks\current.json"
+Get-ChildItem $taskRoot -Force
+Get-Item $currentView
+```
 
 当前 public-core 方向下，真实 `.jsonl` 默认被 Git 忽略。未来 private vault 可以选择追踪这些本地日志。
 

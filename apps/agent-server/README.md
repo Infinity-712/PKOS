@@ -18,7 +18,7 @@ This package provides the first PKOS-native Agent Runtime skeleton:
 
 ## Non-goals
 
-This skeleton does not implement tool calling, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, OpenClaw, WeChat, formal tasks, trusted migration, durable agent memory, or object mutation.
+This skeleton does not implement tool calling, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, OpenClaw, WeChat, Agent-created tasks, reminder scheduling, trusted migration, durable agent memory, or object mutation.
 
 ## SQLite Driver
 
@@ -70,6 +70,7 @@ npm run action-recovery-smoke
 npm run audit-api-smoke
 npm run inbox-review-api-smoke
 npm run state-timeline-api-smoke
+npm run task-api-smoke
 npm run cors-smoke
 npm run llm-readonly-smoke
 npm run provider-config -- list
@@ -95,6 +96,12 @@ npm run dev
 `npm run inbox-review-api-smoke` verifies the fixed Inbox Review API against a temporary `PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI.
 
 `npm run state-timeline-api-smoke` verifies the read-only State Timeline API against a temporary `PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI. It covers empty state, ordering, current/filter semantics, stale display, malformed JSONL failure, append-then-refresh, and audit redaction.
+
+`npm run task-api-smoke` verifies the fixed Task API against a temporary
+`PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI. It covers
+task creation, status transitions, request replay/conflict, stale running
+recovery, restart rebuild, PKOS_DATA_ROOT separation, CLI failure handling, and
+audit redaction for task title/description/reason text.
 
 `npm run llm-readonly-smoke` verifies the real-provider read-only MVP against a local fake Chat Completions server. It does not call an external model. It covers dry-run default behavior, provider configuration validation, per-request external consent, bounded prompt assembly, SSE streaming, tool output rejection, safe error mapping, abort semantics, terminal generation state, and secret redaction.
 
@@ -329,7 +336,9 @@ Current registered tools:
 - `pkos.inbox.append`: `L1`, side-effecting, no confirmation required for explicit append calls;
 - `pkos.inbox_review.archive`: `L2`, side-effecting, explicit user confirmation required;
 - `pkos.inbox_review.restore`: `L2`, side-effecting, explicit user confirmation required;
-- `pkos.state.append`: `L1`, side-effecting, no confirmation required for explicit append calls.
+- `pkos.state.append`: `L1`, side-effecting, no confirmation required for explicit append calls;
+- `pkos.task.create`: `L2`, side-effecting, explicit user confirmation required;
+- `pkos.task.transition`: `L2`, side-effecting, explicit user confirmation required.
 
 `ToolRegistry` is static code registration. It does not dynamically load modules or commands from strings.
 
@@ -338,9 +347,15 @@ Current registered tools:
 - `pkos.inbox.append`;
 - `pkos.inbox_review.archive`;
 - `pkos.inbox_review.restore`;
-- `pkos.state.append`.
+- `pkos.state.append`;
+- `pkos.task.create`;
+- `pkos.task.transition`.
 
-It blocks unknown tools, trusted/object/task/governance writes, deletes, arbitrary file writes, and arbitrary command execution. The router distinguishes `unknown_tool`, `invalid_input`, `permission_denied`, `confirmation_required`, `cli_failed`, `timeout`, and `written` outcomes.
+It blocks unknown tools, trusted/object/governance writes, task writes outside
+the fixed confirmed task tools, deletes, arbitrary file writes, and arbitrary
+command execution. The router distinguishes `unknown_tool`, `invalid_input`,
+`permission_denied`, `confirmation_required`, `cli_failed`, `timeout`, and
+`written` outcomes.
 
 Node does not write `inbox/items.jsonl` or `state/snapshots.jsonl` directly. The deterministic write interface is the existing Python CLI:
 
@@ -349,7 +364,13 @@ python -B -m tools.pkos inbox-append --json
 python -B -m tools.pkos inbox-review mark --id <id> --status archived --reason "..."
 python -B -m tools.pkos inbox-review mark --id <id> --status unprocessed --reason "..."
 python -B -m tools.pkos state-append --json
+python -B -m tools.pkos task-create --title "..." --source web --request-id "..."
+python -B -m tools.pkos task-transition --task-id <task_id> --target-status in_progress --reason "..."
 ```
+
+There is no current `task-note` CLI/API/tool. Historical `note_added` task
+actions are tolerated by Python rebuild for alpha compatibility, but new writes
+do not create note actions.
 
 Node also does not read `state/snapshots.jsonl` directly for dashboard state history. The read-only State Timeline source is:
 
@@ -372,7 +393,9 @@ Endpoints:
 - `POST /api/actions/inbox-append` maps only to `pkos.inbox.append`;
 - `POST /api/pkos/inbox-review/:id/archive` maps only to `pkos.inbox_review.archive`;
 - `POST /api/pkos/inbox-review/:id/restore` maps only to `pkos.inbox_review.restore`;
-- `POST /api/actions/state-append` maps only to `pkos.state.append`.
+- `POST /api/actions/state-append` maps only to `pkos.state.append`;
+- `POST /api/pkos/tasks` maps only to `pkos.task.create`;
+- `POST /api/pkos/tasks/:taskId/transition` maps only to `pkos.task.transition`.
 
 Clients cannot provide a tool name, executable, module, CLI subcommand, or file path. Unknown body fields are rejected, including override attempts such as `toolName`, `command`, or `executable`.
 
@@ -459,6 +482,10 @@ Resolution never calls `ToolExecutor`, never runs Python, never writes the PKOS 
 - `GET /api/pkos/inbox-review`
 - `POST /api/pkos/inbox-review/:id/archive`
 - `POST /api/pkos/inbox-review/:id/restore`
+- `GET /api/pkos/tasks`
+- `GET /api/pkos/tasks/:taskId`
+- `POST /api/pkos/tasks`
+- `POST /api/pkos/tasks/:taskId/transition`
 - `GET /api/actions/requests`
 - `GET /api/actions/requests/:requestId`
 - `POST /api/actions/requests/:requestId/resolve`
@@ -490,6 +517,27 @@ The fixed Action API is not wired into `POST /api/chat/send`.
 
 `GET /api/pkos/state-timeline` is read-only and calls `python -B -m tools.pkos state-list --json`. Supported query parameters are `energy`, `mood`, `mode`, and `limit`. The default limit is 50 and the maximum is 200. `current` is always the latest overall explicit state snapshot before filters; `items` may be filtered. The route adds a derived `stale` flag when a snapshot is older than the 24 hour freshness window used by the Agent Context contract. Stale means "possibly outdated", not invalid. The API does not score, diagnose, summarize trends, edit historical snapshots, or write audit events for ordinary reads. Python integrity failures return a structured 500 without raw stderr, tracebacks, paths, environment variables, or state note full text.
 
+`GET /api/pkos/tasks` and `GET /api/pkos/tasks/:taskId` are read-only views
+over the Python task current view. Supported list query parameters are
+`status`, `priority`, `tag`, and `limit`; full task titles/descriptions may be
+returned to localhost Web for human management, but are not copied into generic
+SQLite audit payloads.
+
+Task writes use the fixed Action API endpoints above. They require
+`confirmed: true`, carry a browser/client `requestId`, and call only the Python
+task CLI. Node never edits `tasks/items.jsonl` or `tasks/actions.jsonl`
+directly. The task authority logs live under `PKOS_DATA_ROOT`; the derived
+`runtime/tasks/current.json` view may be deleted and rebuilt.
+
+The Web Dashboard supplies `confirmed: true` automatically when the human clicks
+the explicit Create Task or Apply Transition button. Direct API callers still
+must provide the flag; `confirmed: false` is rejected.
+
+Python task CLI child processes are launched with `shell: false`,
+`PYTHONUTF8=1`, and `PYTHONIOENCODING=utf-8` so Windows stdout is decoded as
+UTF-8 and Chinese task text round-trips through API response, JSONL authority
+logs, and rebuilt current views.
+
 ## Web Dashboard
 
 The companion dashboard lives in `apps/web-dashboard`. In development, run the Agent Server and the dashboard in two terminals:
@@ -506,7 +554,12 @@ npm run dev
 
 Open `http://127.0.0.1:5173`. Vite proxies `/api` and `/health` to `http://127.0.0.1:8790`.
 
-The dashboard is a local human operations surface for health, fixed capture actions, State Timeline viewing, Inbox Review archive/restore, indeterminate action recovery, and audit viewing. It is not PKOS authority and does not add write permissions, generic tool execution, Agent tool selection, task management, reminders, RAG, memory, OpenClaw, WeChat, or production hosting.
+The dashboard is a local human operations surface for health, fixed capture
+actions, State Timeline viewing, Inbox Review archive/restore, explicit formal
+Task management, indeterminate action recovery, and audit viewing. It is not
+PKOS authority and does not add generic tool execution, Agent tool selection,
+reminders, RAG, memory, OpenClaw, WeChat, Desktop task UI, or production
+hosting.
 
 ## PKOS Authority Boundary
 
@@ -514,6 +567,15 @@ SQLite is runtime storage only. It is not PKOS authority and must not replace Gi
 
 Context is runtime-derived input, not authority. It may guide a generation, but it must not promote knowledge, create tasks, mutate objects, or bypass human review gates.
 
-This skeleton writes only the Agent Runtime SQLite database under `runtime/agent/`. It does not write `objects/`, `trusted`, formal tasks, governance docs, Moonlolo/OpenClaw files, or PKOS Python core behavior.
+This skeleton writes the Agent Runtime SQLite database under `runtime/agent/`
+and can invoke fixed Python CLI commands for explicit, confirmed task writes.
+It does not write `objects/`, `trusted`, governance docs, Moonlolo/OpenClaw
+files, or PKOS Python core behavior directly.
 
-The only authority data writes reachable from the internal tool layer are append-only `inbox/items.jsonl`, `state/snapshots.jsonl`, and Inbox Review action log writes performed by the Python PKOS CLI. Node never edits existing inbox captures, historical state snapshots, or review actions directly. The runtime does not create objects, tasks, trusted migrations, converted targets, reminder schedules, or diagnoses.
+The only authority data writes reachable from the internal tool layer are
+append-only `inbox/items.jsonl`, `state/snapshots.jsonl`, Inbox Review action
+log writes, and formal task item/action writes performed by the Python PKOS
+CLI. Node never edits existing inbox captures, historical state snapshots,
+review actions, or task records directly. The runtime does not create objects,
+auto-create tasks from chat or Inbox, perform trusted migrations, create
+converted targets, schedule reminders, or make diagnoses.

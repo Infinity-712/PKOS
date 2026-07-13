@@ -1,6 +1,7 @@
 import { inboxAppendTool } from "./builtin/inboxAppend.js";
 import { inboxReviewArchiveTool, inboxReviewRestoreTool } from "./builtin/inboxReview.js";
 import { stateAppendTool } from "./builtin/stateAppend.js";
+import { taskCreateTool, taskTransitionTool } from "./builtin/taskFlow.js";
 import type { RegisteredToolDefinition, ToolDefinition, ToolDescriptor } from "./ToolTypes.js";
 
 export class ToolRegistry {
@@ -36,5 +37,7 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(inboxReviewArchiveTool);
   registry.register(inboxReviewRestoreTool);
   registry.register(stateAppendTool);
+  registry.register(taskCreateTool);
+  registry.register(taskTransitionTool);
   return registry;
 }

@@ -140,6 +140,7 @@ Flow Hub MVP requires these directories:
 
 - `inbox/`
 - `state/`
+- `tasks/`
 - `runtime/`
 - `runtime/flow/`
 
@@ -149,6 +150,10 @@ Flow Hub MVP requires:
 
 - `python -m tools.pkos inbox-append`
 - `python -m tools.pkos state-append`
+- `python -m tools.pkos task-list`
+- `python -m tools.pkos task-create`
+- `python -m tools.pkos task-transition`
+- `python -m tools.pkos task-rebuild`
 - `python -m tools.pkos gen-flow`
 - `python -m tools.pkos export-agent-context`
 
@@ -161,6 +166,7 @@ Flow Hub MVP requires:
 - `runtime/flow/review_queue.json`
 - `runtime/flow/recovery_queue.json`
 - `runtime/flow/writing_queue.json`
+- `runtime/flow/task_summary.json`
 - `runtime/flow/flow_budget.json`
 
 `export-agent-context` must generate:
@@ -177,9 +183,13 @@ Future append-only files include:
 
 - `inbox/items.jsonl`
 - `state/snapshots.jsonl`
+- `tasks/items.jsonl`
+- `tasks/actions.jsonl`
 - `review/logs/*`
 
-This MVP implements append-only writes for `inbox/items.jsonl` and `state/snapshots.jsonl`. Both are local operational logs and are ignored by Git by default.
+This MVP implements append-only writes for `inbox/items.jsonl`,
+`state/snapshots.jsonl`, and formal task logs. These local operational logs are
+private data and are ignored by Git by default in the public core repository.
 
 ### Write Boundary
 
@@ -197,6 +207,12 @@ They may write only:
 `state-append` may write only:
 
 - `state/snapshots.jsonl`
+
+Task commands may write only:
+
+- `tasks/items.jsonl`
+- `tasks/actions.jsonl`
+- `runtime/tasks/current.json`
 
 These commands must not write:
 
@@ -223,6 +239,11 @@ It must not contain the whole repository. It should include only:
 - latest_digest metadata or bounded excerpt
 - operational_skills, currently empty if not implemented
 - retrieved_objects, currently empty because RAG is not implemented
+- task_summary with bounded counts/source hashes only
+
+`task_summary` may include counts, overdue count, next due timestamp, source
+counts, and source hashes. It must not include full task title, description,
+reason, or note by default.
 
 ### MVP Acceptance
 

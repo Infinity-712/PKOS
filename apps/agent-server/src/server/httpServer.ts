@@ -8,6 +8,7 @@ import { openAgentDatabase, type AgentDatabase } from "../db/connection.js";
 import { EventStore } from "../events/EventStore.js";
 import { handleInboxReviewRoutes } from "../pkos/InboxReviewRoutes.js";
 import { handleStateTimelineRoutes } from "../pkos/StateTimelineRoutes.js";
+import { handleTaskRoutes } from "../pkos/TaskRoutes.js";
 import { ProviderProfileRegistry } from "../providers/registry/ProviderProfileRegistry.js";
 import { GenerationManager } from "../runtime/GenerationManager.js";
 import { AgentRunner } from "../runtime/AgentRunner.js";
@@ -52,6 +53,10 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       }
 
       if (await handleChatRoutes(req, res, { db, runner, contextBuilder })) {
+        return;
+      }
+
+      if (await handleTaskRoutes(req, res)) {
         return;
       }
 

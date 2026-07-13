@@ -9,6 +9,7 @@ from typing import Any
 
 from tools.common.object_store import build_object_index
 from tools.inbox_review.review import build_review_view, content_excerpt
+from tools.task_flow.tasks import TaskFlowError, build_task_summary
 
 SCHEMA_VERSION = "0.5-alpha"
 MOONLOLO_SCHEMA_VERSION = "0.5-beta"
@@ -209,28 +210,57 @@ def flow_budget(generated_at: str) -> dict[str, Any]:
     }
 
 
+def _task_summary(tasks_dir: Path, generated_at: str, warn: bool = False) -> dict[str, Any]:
+    try:
+        return build_task_summary(tasks_dir / "items.jsonl", tasks_dir / "actions.jsonl", generated_at)
+    except TaskFlowError as exc:
+        if warn:
+            print(f"warning: task summary unavailable: {exc.code}: {exc.message}")
+        return {
+            "schema_version": "0.7-alpha",
+            "generated_at": generated_at,
+            "source": {
+                "authority": "tasks/items.jsonl + tasks/actions.jsonl",
+                "error_code": exc.code,
+            },
+            "counts": {
+                "open": 0,
+                "in_progress": 0,
+                "blocked": 0,
+                "done": 0,
+                "cancelled": 0,
+                "overdue": 0,
+            },
+            "next_due_at": None,
+            "stale": True,
+        }
+
+
 def build_flow_models(
     objects_dir: Path,
     review_dir: Path,
     state_dir: Path | None = None,
+    tasks_dir: Path | None = None,
     generated_at: str | None = None,
     warn: bool = False,
 ) -> dict[str, dict[str, Any]]:
     ts = generated_at or utc_now()
     state_path = (state_dir or Path("state")) / "snapshots.jsonl"
+    task_summary_model = _task_summary(tasks_dir or Path("tasks"), ts, warn)
     return {
         "current_state": current_state(ts, state_path, warn),
         "today_queue": empty_queue(ts, "none"),
         "review_queue": review_queue(objects_dir, review_dir, ts),
         "recovery_queue": empty_queue(ts, "not_implemented"),
         "writing_queue": writing_queue(objects_dir, ts),
+        "task_summary": task_summary_model,
         "flow_budget": flow_budget(ts),
     }
 
 
-def run_gen_flow(objects_dir: Path, review_dir: Path, state_dir: Path, runtime_flow_dir: Path) -> int:
+def run_gen_flow(objects_dir: Path, review_dir: Path, state_dir: Path, runtime_flow_dir: Path, tasks_dir: Path | None = None) -> int:
     runtime_flow_dir.mkdir(parents=True, exist_ok=True)
-    models = build_flow_models(objects_dir, review_dir, state_dir, warn=True)
+    models = build_flow_models(objects_dir, review_dir, state_dir, tasks_dir, warn=True)
     for name, model in models.items():
         write_json(runtime_flow_dir / f"{name}.json", model)
         print(f"generated: {(runtime_flow_dir / f'{name}.json').as_posix()}")
@@ -279,12 +309,13 @@ def build_agent_context(
     if budget:
         context_budget.update(budget)
 
-    fallback = build_flow_models(objects_dir, review_dir, state_dir, ts)
+    fallback = build_flow_models(objects_dir, review_dir, state_dir, generated_at=ts)
     current_state_model = _flow_model_from_file_or_build("current_state", runtime_flow_dir, fallback)
     today_queue_model = _flow_model_from_file_or_build("today_queue", runtime_flow_dir, fallback)
     review_queue_model = _flow_model_from_file_or_build("review_queue", runtime_flow_dir, fallback)
     recovery_queue_model = _flow_model_from_file_or_build("recovery_queue", runtime_flow_dir, fallback)
     writing_queue_model = _flow_model_from_file_or_build("writing_queue", runtime_flow_dir, fallback)
+    task_summary_model = _flow_model_from_file_or_build("task_summary", runtime_flow_dir, fallback)
     flow_budget_model = _flow_model_from_file_or_build("flow_budget", runtime_flow_dir, fallback)
 
     return {
@@ -302,6 +333,12 @@ def build_agent_context(
         "today_queue": list(today_queue_model.get("items", [])),
         "review_queue": list(review_queue_model.get("items", []))[: int(context_budget["max_review_items"])],
         "recovery_queue": list(recovery_queue_model.get("items", [])),
+        "task_summary": {
+            "counts": task_summary_model.get("counts", {}),
+            "next_due_at": task_summary_model.get("next_due_at"),
+            "stale": task_summary_model.get("stale", True),
+            "source": task_summary_model.get("source", {}),
+        },
         "writing_queue": list(writing_queue_model.get("items", []))[: int(context_budget["max_writing_items"])],
         "latest_digest": _latest_digest(digests_dir, int(context_budget["max_digest_chars"])),
         "operational_skills": [],
@@ -484,9 +521,10 @@ def main_gen_flow() -> int:
     parser.add_argument("--objects-dir", default="objects")
     parser.add_argument("--review-dir", default="review")
     parser.add_argument("--state-dir", default="state")
+    parser.add_argument("--tasks-dir", default="tasks")
     parser.add_argument("--runtime-flow-dir", default="runtime/flow")
     args = parser.parse_args()
-    return run_gen_flow(Path(args.objects_dir), Path(args.review_dir), Path(args.state_dir), Path(args.runtime_flow_dir))
+    return run_gen_flow(Path(args.objects_dir), Path(args.review_dir), Path(args.state_dir), Path(args.runtime_flow_dir), Path(args.tasks_dir))
 
 
 def main_export_agent_context() -> int:

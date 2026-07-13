@@ -28,8 +28,11 @@ Covered APIs:
 - `POST /api/actions/inbox-append`
 - `POST /api/actions/state-append`
 - `GET /api/pkos/state-timeline`
+- fixed request-attempt endpoint mapping for `POST /api/pkos/tasks`
+- fixed request-attempt endpoint mapping for `POST /api/pkos/tasks/:taskId/transition`
 
 Web-only authority management surfaces such as Inbox Review, Action Resolution, and Audit can keep their local client code.
+Task note endpoint mapping is intentionally not exposed; current v0.7-alpha task notes are legacy-compatible authority events only.
 
 ## Behavior
 

@@ -4,6 +4,7 @@ import { resolveAgentPaths, type AgentPaths } from "../config/paths.js";
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput, InboxReviewStatus } from "../tools/builtin/inboxReview.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
+import type { TaskCreateInput, TaskTransitionInput } from "../tools/builtin/taskFlow.js";
 import { CliProcessRunner, type CliProcessRunResult } from "./CliProcessRunner.js";
 import { errorResult, type WritebackResult, writtenResult } from "./WritebackTypes.js";
 
@@ -66,6 +67,35 @@ export type StateTimelineCliResult =
       count: number;
       filters: Record<string, unknown>;
     }
+  | { ok: false; errorCode: string; message: string };
+
+export type TaskListFilters = {
+  status?: string;
+  priority?: string;
+  tag?: string;
+  limit?: number;
+};
+
+export type TaskCliItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  source: string;
+  tags: string[];
+  priority: string;
+  dueAt: string | null;
+  createdAt: string;
+  createdBy: string;
+  status: string;
+  latestActionId: string | null;
+  latestActionAt: string | null;
+  latestReason: string | null;
+  notesCount: number;
+  latestNoteAt: string | null;
+};
+
+export type TaskCliListResult =
+  | { ok: true; generatedAt: string; count: number; items: TaskCliItem[]; source: Record<string, unknown> }
   | { ok: false; errorCode: string; message: string };
 
 const MAX_OUTPUT_BYTES = 64 * 1024;
@@ -148,6 +178,56 @@ export class PkosCliClient {
     return this.inboxReviewMark("pkos.inbox_review.restore", "unprocessed", input);
   }
 
+  async taskCreate(input: TaskCreateInput): Promise<WritebackResult> {
+    const args = [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "task-create",
+      "--title",
+      input.title,
+      "--source",
+      input.source,
+      "--priority",
+      input.priority,
+      "--created-by",
+      input.createdBy,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ];
+    if (input.description) {
+      args.push("--description", input.description);
+    }
+    if (input.tags.length > 0) {
+      args.push("--tags", input.tags.join(","));
+    }
+    if (input.dueAt) {
+      args.push("--due-at", input.dueAt);
+    }
+    return this.runTaskWriteCommand("pkos.task.create", args);
+  }
+
+  async taskTransition(input: TaskTransitionInput): Promise<WritebackResult> {
+    return this.runTaskWriteCommand("pkos.task.transition", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "task-transition",
+      "--task-id",
+      input.taskId,
+      "--target-status",
+      input.targetStatus,
+      "--reason",
+      input.reason,
+      "--created-by",
+      input.createdBy,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ]);
+  }
+
   async inboxReviewList(filters: InboxReviewListFilters): Promise<InboxReviewCliListResult> {
     const args = ["-B", "-m", "tools.pkos", "inbox-review", "list", "--json"];
     if (filters.status) {
@@ -225,6 +305,45 @@ export class PkosCliClient {
     };
   }
 
+  async taskList(filters: TaskListFilters): Promise<TaskCliListResult> {
+    const args = ["-B", "-m", "tools.pkos", "task-list", "--json"];
+    if (filters.status) {
+      args.push("--status", filters.status);
+    }
+    if (filters.priority) {
+      args.push("--priority", filters.priority);
+    }
+    if (filters.tag) {
+      args.push("--tag", filters.tag);
+    }
+    if (filters.limit !== undefined) {
+      args.push("--limit", String(filters.limit));
+    }
+
+    const result = await this.runRawCommand(args);
+    if (result.error) {
+      return result.error;
+    }
+    const payload = parseCliJson("pkos.task.list", result.result);
+    if (!payload) {
+      return { ok: false, errorCode: "cli_failed", message: "PKOS CLI returned invalid JSON" };
+    }
+    if (payload.ok === false) {
+      return {
+        ok: false,
+        errorCode: cliErrorCode(payload),
+        message: cliErrorMessage(payload, "PKOS CLI rejected task list"),
+      };
+    }
+    return {
+      ok: true,
+      generatedAt: stringValue(payload.generated_at),
+      count: typeof payload.count === "number" ? payload.count : 0,
+      items: normalizeTaskCliItems(payload.items),
+      source: isRecord(payload.source) ? payload.source : {},
+    };
+  }
+
   private async inboxReviewMark(operation: string, status: InboxReviewStatus, input: InboxReviewMarkInput): Promise<WritebackResult> {
     const args = [
       "-B",
@@ -276,6 +395,48 @@ export class PkosCliClient {
       recordId,
       target,
       message: "PKOS append completed",
+    });
+  }
+
+  private async runTaskWriteCommand(operation: string, args: string[]): Promise<WritebackResult> {
+    const result = await this.runner.run({
+      executable: this.pythonBin,
+      args,
+      cwd: this.paths.coreRoot,
+      env: buildChildEnv(this.paths),
+      timeoutMs: this.timeoutMs,
+      maxStdoutBytes: MAX_OUTPUT_BYTES,
+      maxStderrBytes: MAX_OUTPUT_BYTES,
+    });
+
+    if (result.timedOut) {
+      return errorResult({ operation, errorCode: "timeout", message: "PKOS CLI timed out" });
+    }
+    if (result.stdoutTruncated || result.stderrTruncated) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI output exceeded limit" });
+    }
+    if (result.spawnError) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI could not be started" });
+    }
+
+    const payload = parseCliJson(operation, result);
+    if (payload?.ok === false) {
+      return errorResult({ operation, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, "PKOS CLI rejected task write") });
+    }
+    if (result.exitCode !== 0) {
+      return errorResult({ operation, errorCode: "cli_failed", message: `PKOS CLI exited with code ${result.exitCode ?? "unknown"}` });
+    }
+    if (!payload || payload.ok !== true) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI returned invalid task JSON" });
+    }
+    const action = isRecord(payload.action) ? payload.action : {};
+    const item = isRecord(payload.item) ? payload.item : {};
+    const task = isRecord(payload.task) ? payload.task : {};
+    return writtenResult({
+      operation,
+      recordId: stringValue(action.id) || stringValue(item.id) || stringValue(task.id) || undefined,
+      target: operation === "pkos.task.create" ? "tasks/items.jsonl" : "tasks/actions.jsonl",
+      message: `PKOS task write ${stringValue(payload.status) || "completed"}`,
     });
   }
 
@@ -341,6 +502,13 @@ function cliErrorCode(payload: Record<string, unknown> | null): string {
   return typeof payload.error.code === "string" ? payload.error.code : "cli_failed";
 }
 
+function cliErrorMessage(payload: Record<string, unknown> | null, fallback: string): string {
+  if (!payload || !isRecord(payload.error)) {
+    return fallback;
+  }
+  return typeof payload.error.message === "string" ? payload.error.message : fallback;
+}
+
 function normalizeInboxReviewCliItems(value: unknown): InboxReviewCliItem[] {
   if (!Array.isArray(value)) {
     return [];
@@ -364,6 +532,29 @@ function normalizeStateTimelineCliItems(value: unknown): StateTimelineCliItem[] 
     return [];
   }
   return value.filter(isRecord).map(normalizeStateTimelineCliItem);
+}
+
+function normalizeTaskCliItems(value: unknown): TaskCliItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isRecord).map((item) => ({
+    id: stringValue(item.id),
+    title: stringValue(item.title),
+    description: typeof item.description === "string" ? item.description : null,
+    source: stringValue(item.source),
+    tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === "string") : [],
+    priority: stringValue(item.priority),
+    dueAt: typeof item.due_at === "string" ? item.due_at : null,
+    createdAt: stringValue(item.created_at),
+    createdBy: stringValue(item.created_by),
+    status: stringValue(item.status),
+    latestActionId: typeof item.latest_action_id === "string" ? item.latest_action_id : null,
+    latestActionAt: typeof item.latest_action_at === "string" ? item.latest_action_at : null,
+    latestReason: typeof item.latest_reason === "string" ? item.latest_reason : null,
+    notesCount: typeof item.notes_count === "number" ? item.notes_count : 0,
+    latestNoteAt: typeof item.latest_note_at === "string" ? item.latest_note_at : null,
+  }));
 }
 
 function normalizeStateTimelineCliItem(item: Record<string, unknown>): StateTimelineCliItem {
@@ -414,6 +605,8 @@ function buildChildEnv(paths: AgentPaths): NodeJS.ProcessEnv {
   copyEnv(env, "TMP");
   copyEnv(env, "TEMP");
   copyEnv(env, "PYTHONUTF8");
+  env.PYTHONUTF8 = "1";
+  env.PYTHONIOENCODING = "utf-8";
   env.PKOS_CORE_ROOT = paths.coreRoot;
   env.PKOS_DATA_ROOT = paths.dataRoot;
   return env;

@@ -330,6 +330,93 @@ textarea {
   align-items: end;
 }
 
+.tasks-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.55fr) minmax(360px, 0.65fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.task-due-picker {
+  position: relative;
+}
+
+.task-due-trigger,
+.quick-date-row,
+.task-due-actions,
+.calendar-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.task-due-popover {
+  position: absolute;
+  z-index: 10;
+  width: min(680px, calc(100vw - 48px));
+  border: 1px solid #aeb7b1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 14px 40px rgba(23, 32, 27, 0.18);
+  padding: 12px;
+}
+
+.task-due-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 132px;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.calendar-heading {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.calendar-weekdays,
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  text-align: center;
+}
+
+.calendar-weekdays {
+  color: #526058;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.calendar-days button,
+.time-list button {
+  min-height: 34px;
+  padding: 5px;
+}
+
+.calendar-days .muted-day {
+  color: #8a938d;
+  background: #f7faf8;
+}
+
+.calendar-days .today {
+  border-color: #386b56;
+}
+
+.time-list {
+  display: grid;
+  gap: 4px;
+  max-height: 290px;
+  overflow-y: auto;
+}
+
+.task-due-actions {
+  justify-content: flex-end;
+  border-top: 1px solid #dde3df;
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -372,8 +459,10 @@ tr:hover td {
     .page-grid.two-column,
     .split-page,
     .state-main-grid,
+    .tasks-page,
     .compact-grid,
-    .review-item {
+    .review-item,
+    .task-due-grid {
     grid-template-columns: 1fr;
   }
 

@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +38,10 @@ def run_pkos(data_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def parse_stdout_json(result: subprocess.CompletedProcess[str]) -> dict:
     assert result.returncode == 0, result.stderr or result.stdout
     return json.loads(result.stdout)
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def make_inbox_rows() -> list[dict]:
@@ -136,7 +141,7 @@ def main() -> int:
                     "schema_version": "0.5-alpha",
                     "type": "inbox_review_action",
                     "id": "inbox_review_profile_archived",
-                    "created_at": "2026-07-02T09:00:00Z",
+                    "created_at": utc_now(),
                     "inbox_id": "inbox.profile.archived",
                     "action": "mark_status",
                     "status": "archived",
@@ -147,7 +152,7 @@ def main() -> int:
                     "schema_version": "0.5-alpha",
                     "type": "inbox_review_action",
                     "id": "inbox_review_profile_converted",
-                    "created_at": "2026-07-02T09:05:00Z",
+                    "created_at": utc_now(),
                     "inbox_id": "inbox.profile.converted",
                     "action": "mark_status",
                     "status": "converted",

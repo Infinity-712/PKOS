@@ -4,7 +4,7 @@ Usage:
   python -m tools.pkos validate [--path objects]
   python -m tools.pkos gen-queue [--objects objects --review review]
   python -m tools.pkos gen-digest [--objects-dir objects --output-dir digests --week YYYY-Www]
-  python -m tools.pkos gen-flow [--objects-dir objects --review-dir review --state-dir state --runtime-flow-dir runtime/flow]
+  python -m tools.pkos gen-flow [--objects-dir objects --review-dir review --state-dir state --tasks-dir tasks --runtime-flow-dir runtime/flow]
   python -m tools.pkos export-agent-context [--profile default|moonlolo] [--objects-dir objects --review-dir review --digests-dir digests --state-dir state --runtime-flow-dir runtime/flow --output runtime/agent_context.json]
   python -m tools.pkos inbox-append --capture-type note --content "..."
   python -m tools.pkos inbox-review list [--json]
@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
 
 from tools.digest.gen_digest import run_gen_digest
 from tools.flow_hub.append_logs import (
@@ -59,6 +60,17 @@ from tools.inbox_review.review import (
     run_list as run_inbox_review_list,
     run_mark as run_inbox_review_mark,
 )
+from tools.task_flow.tasks import (
+    PRIORITIES as TASK_PRIORITIES,
+    STATUSES as TASK_STATUSES,
+    TaskFlowError,
+    normalize_due_at,
+    parse_tags as parse_task_tags,
+    rebuild_current_view as rebuild_task_current_view,
+    run_create as run_task_create,
+    run_list as run_task_list,
+    run_transition as run_task_transition,
+)
 from tools.pkos_paths import (
     display_data_path,
     get_core_root,
@@ -80,6 +92,10 @@ COMMAND_NAMES = {
     "export-agent-context",
     "inbox-append",
     "inbox-review",
+    "task-create",
+    "task-list",
+    "task-transition",
+    "task-rebuild",
     "state-list",
     "state-append",
     "paths",
@@ -87,6 +103,13 @@ COMMAND_NAMES = {
     "serve",
     "export-site-data",
 }
+
+
+def _configure_stdio_for_cli() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="strict")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 def _print_json(payload: dict) -> None:
@@ -292,6 +315,7 @@ def _print_inbox_review_list(view: dict) -> None:
 
 
 def main() -> int:
+    _configure_stdio_for_cli()
     parser = argparse.ArgumentParser(prog="pkos", description="PKOS utility commands")
     parser.add_argument("--data-root", default=None, help="Override PKOS_DATA_ROOT for this command")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -319,6 +343,7 @@ def main() -> int:
     flow_parser.add_argument("--objects-dir", default="objects", help="Objects directory")
     flow_parser.add_argument("--review-dir", default="review", help="Review directory")
     flow_parser.add_argument("--state-dir", default="state", help="State snapshots directory")
+    flow_parser.add_argument("--tasks-dir", default="tasks", help="Formal tasks authority directory")
     flow_parser.add_argument("--runtime-flow-dir", default="runtime/flow", help="Flow runtime output directory")
 
     context_parser = subparsers.add_parser("export-agent-context", help="Export bounded Moonlolo Agent Context Pack")
@@ -372,6 +397,47 @@ def main() -> int:
     inbox_review_mark.add_argument("--inbox-path", default="inbox/items.jsonl")
     inbox_review_mark.add_argument("--actions-path", default="review/logs/inbox_review_actions.jsonl")
     inbox_review_mark.add_argument("--runtime-path", default="runtime/inbox_review/current.json")
+
+    task_create = subparsers.add_parser("task-create", help="Append a formal Task creation record")
+    task_create.add_argument("--title", required=True)
+    task_create.add_argument("--description", default=None)
+    task_create.add_argument("--source", default="manual")
+    task_create.add_argument("--tags", default="")
+    task_create.add_argument("--priority", default="normal", choices=sorted(TASK_PRIORITIES))
+    task_create.add_argument("--due-at", default=None)
+    task_create.add_argument("--created-by", default="human")
+    task_create.add_argument("--request-id", default=None)
+    task_create.add_argument("--items-path", default="tasks/items.jsonl")
+    task_create.add_argument("--actions-path", default="tasks/actions.jsonl")
+    task_create.add_argument("--runtime-path", default="runtime/tasks/current.json")
+    task_create.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    task_list = subparsers.add_parser("task-list", help="List formal Tasks from the rebuilt current view")
+    task_list.add_argument("--status", choices=sorted(TASK_STATUSES), default=None)
+    task_list.add_argument("--priority", choices=sorted(TASK_PRIORITIES), default=None)
+    task_list.add_argument("--tag", default=None)
+    task_list.add_argument("--limit", type=int, default=None)
+    task_list.add_argument("--items-path", default="tasks/items.jsonl")
+    task_list.add_argument("--actions-path", default="tasks/actions.jsonl")
+    task_list.add_argument("--runtime-path", default="runtime/tasks/current.json")
+    task_list.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    task_transition = subparsers.add_parser("task-transition", help="Append a formal Task status transition")
+    task_transition.add_argument("--task-id", required=True)
+    task_transition.add_argument("--target-status", required=True, choices=sorted(TASK_STATUSES))
+    task_transition.add_argument("--reason", required=True)
+    task_transition.add_argument("--created-by", default="human")
+    task_transition.add_argument("--request-id", default=None)
+    task_transition.add_argument("--items-path", default="tasks/items.jsonl")
+    task_transition.add_argument("--actions-path", default="tasks/actions.jsonl")
+    task_transition.add_argument("--runtime-path", default="runtime/tasks/current.json")
+    task_transition.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    task_rebuild = subparsers.add_parser("task-rebuild", help="Rebuild formal Task runtime current view")
+    task_rebuild.add_argument("--items-path", default="tasks/items.jsonl")
+    task_rebuild.add_argument("--actions-path", default="tasks/actions.jsonl")
+    task_rebuild.add_argument("--runtime-path", default="runtime/tasks/current.json")
+    task_rebuild.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
 
     state_list_parser = subparsers.add_parser("state-list", help="List append-only Current State snapshots")
     state_list_parser.add_argument("--limit", type=int, default=None)
@@ -449,6 +515,7 @@ def main() -> int:
             resolve_data_path(args.review_dir),
             resolve_data_path(args.state_dir),
             resolve_data_path(args.runtime_flow_dir),
+            resolve_data_path(args.tasks_dir),
         )
 
     if args.command == "export-agent-context":
@@ -590,6 +657,70 @@ def main() -> int:
                 if item:
                     print(f"effective_status: {item.get('effective_status')}")
             return 0
+
+    if args.command in {"task-create", "task-list", "task-transition", "task-rebuild"}:
+        items_path = resolve_data_path(args.items_path)
+        actions_path = resolve_data_path(args.actions_path)
+        runtime_path = resolve_data_path(args.runtime_path)
+        try:
+            if args.command == "task-create":
+                payload = run_task_create(
+                    items_path,
+                    actions_path,
+                    runtime_path,
+                    args.title,
+                    args.description,
+                    args.source,
+                    parse_task_tags(args.tags),
+                    args.priority,
+                    normalize_due_at(args.due_at),
+                    args.created_by,
+                    args.request_id,
+                )
+            elif args.command == "task-list":
+                payload = run_task_list(
+                    items_path,
+                    actions_path,
+                    runtime_path,
+                    args.status,
+                    args.priority,
+                    args.tag,
+                    args.limit,
+                )
+            elif args.command == "task-transition":
+                payload = run_task_transition(
+                    items_path,
+                    actions_path,
+                    runtime_path,
+                    args.task_id,
+                    args.target_status,
+                    args.reason,
+                    args.created_by,
+                    args.request_id,
+                )
+            else:
+                payload = rebuild_task_current_view(items_path, actions_path, runtime_path)
+                payload = {"ok": True, "status": "rebuilt", **payload}
+        except TaskFlowError as exc:
+            if args.json_output:
+                _print_json(_json_error(exc.code, exc.message))
+                return 1
+            print(f"ERROR [{exc.code}]: {exc.message}")
+            return 1
+
+        if args.json_output:
+            _print_json(payload)
+        elif args.command == "task-list":
+            print(f"count: {payload['count']}")
+            for item in payload["items"]:
+                print(f"{item['id']} | {item['status']} | {item['priority']} | {item['title']}")
+        elif args.command == "task-rebuild":
+            print(f"rebuilt: {display_data_path(runtime_path)}")
+            print(f"count: {payload['count']}")
+        else:
+            task = payload.get("task") or {}
+            print(f"{payload.get('status')}: {task.get('id')}")
+        return 0
 
     if args.command == "state-list":
         try:

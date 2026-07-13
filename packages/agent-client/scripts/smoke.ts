@@ -12,6 +12,7 @@ import {
   isAgentEvent,
   parseNdjsonStream,
   formatDateTime,
+  getJson,
   resolveAgentApiUrl,
   resetAttempt,
   startOrReuseAttempt,
@@ -116,6 +117,44 @@ const written = applySubmitResponse(retry, {
 });
 assert(written.status === "written", "written response was not represented");
 
+const taskCreate = startOrReuseAttempt(
+  EMPTY_ATTEMPT,
+  {
+    actionName: "task-create",
+    body: {
+      title: "Create bounded formal task",
+      description: "description stays frozen in request body only",
+      source: "web",
+      tags: ["smoke"],
+      priority: "normal",
+      dueAt: null,
+      confirmed: true,
+    },
+  },
+  () => "task-request-1",
+);
+assert(taskCreate.frozenPayload?.endpoint === "/api/pkos/tasks", "task create endpoint was not fixed");
+assert(taskCreate.frozenPayload?.body.requestId === "task-request-1", "task create requestId missing");
+
+const taskTransition = startOrReuseAttempt(
+  EMPTY_ATTEMPT,
+  {
+    actionName: "task-transition",
+    body: {
+      taskId: "task.1",
+      targetStatus: "done",
+      reason: "human completed",
+      confirmed: true,
+    },
+  },
+  () => "task-request-2",
+);
+assert(taskTransition.frozenPayload?.endpoint === "/api/pkos/tasks/task.1/transition", "task transition endpoint was not fixed");
+assert(taskTransition.frozenPayload?.body.taskId === "task.1", "task transition body lost taskId before shared freeze");
+
+const taskInvalid = applySubmitError(taskTransition, { code: "invalid_transition", message: "invalid" });
+assert(taskInvalid.status === "invalid_input", "task validation error was not mapped to invalid_input");
+
 assert(resolveAgentApiUrl("http://127.0.0.1:8790/", "/health") === "http://127.0.0.1:8790/health", "base URL slash normalization failed");
 assert(resolveAgentApiUrl("", "health") === "/health", "same-origin endpoint normalization failed");
 let absoluteEndpointRejected = false;
@@ -125,6 +164,53 @@ try {
   absoluteEndpointRejected = error instanceof AgentApiClientError && error.code === "unsafe_endpoint";
 }
 assert(absoluteEndpointRejected, "absolute endpoint URL was not rejected");
+
+const unicodeTaskPayload = {
+  ok: true,
+  count: 1,
+  generatedAt: "2026-07-13T00:00:00Z",
+  filters: {},
+  source: {},
+  items: [
+    {
+      id: "task.unicode",
+      title: "中文读取验证：测试任务二",
+      description: "验证 JSONL、Python stdout、Node、HTTP 和 Web 客户端",
+      source: "web",
+      tags: ["unicode"],
+      priority: "normal",
+      dueAt: "2026-07-15T10:00:00Z",
+      createdAt: "2026-07-13T00:00:00Z",
+      createdBy: "human",
+      status: "in_progress",
+      latestActionId: "task_action.unicode",
+      latestActionAt: "2026-07-13T00:01:00Z",
+      latestReason: "开始中文读取链路验收",
+      notesCount: 0,
+      latestNoteAt: null,
+    },
+  ],
+};
+const originalFetch = globalThis.fetch;
+globalThis.fetch = (async () => jsonResponse(unicodeTaskPayload)) as typeof fetch;
+try {
+  const sharedTaskPayload = await getJson(
+    "/api/pkos/tasks",
+    (value: unknown): value is typeof unicodeTaskPayload =>
+      Boolean(
+        value &&
+          typeof value === "object" &&
+          Array.isArray((value as { items?: unknown }).items) &&
+          (value as { items: Array<{ title?: unknown }> }).items[0]?.title === "中文读取验证：测试任务二",
+      ),
+  );
+  const sharedTask = sharedTaskPayload.items[0];
+  assert(sharedTask?.title === "中文读取验证：测试任务二", "shared client changed Chinese task title");
+  assert(sharedTask.description === "验证 JSONL、Python stdout、Node、HTTP 和 Web 客户端", "shared client changed Chinese task description");
+  assert(sharedTask.latestReason === "开始中文读取链路验收", "shared client changed Chinese latest reason");
+} finally {
+  globalThis.fetch = originalFetch;
+}
 
 const calls: Array<{ url: string; method: string; bodyPresent: boolean; signalPresent: boolean }> = [];
 const client = new AgentApiClient({
