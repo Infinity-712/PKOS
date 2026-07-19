@@ -3,6 +3,7 @@ import { platform } from "node:os";
 import { resolveAgentPaths, type AgentPaths } from "../config/paths.js";
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput, InboxReviewStatus } from "../tools/builtin/inboxReview.js";
+import type { ReminderActionInput, ReminderCreateInput, ReminderRescheduleInput } from "../tools/builtin/reminderFlow.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
 import type { TaskCreateInput, TaskTransitionInput } from "../tools/builtin/taskFlow.js";
 import { CliProcessRunner, type CliProcessRunResult } from "./CliProcessRunner.js";
@@ -96,6 +97,46 @@ export type TaskCliItem = {
 
 export type TaskCliListResult =
   | { ok: true; generatedAt: string; count: number; items: TaskCliItem[]; source: Record<string, unknown> }
+  | { ok: false; errorCode: string; message: string };
+
+export type ReminderListFilters = {
+  status?: string;
+  taskId?: string;
+  source?: string;
+  limit?: number;
+};
+
+export type ReminderCliItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  remindAt: string;
+  taskId: string | null;
+  source: string;
+  status: string;
+  createdAt: string;
+  createdBy: string;
+  latestActionId: string | null;
+  latestActionAt: string | null;
+  latestReason: string | null;
+};
+
+export type ReminderCliListResult =
+  | { ok: true; generatedAt: string; count: number; items: ReminderCliItem[]; source: Record<string, unknown> }
+  | { ok: false; errorCode: string; message: string };
+
+export type ReminderDueCliItem = {
+  id: string;
+  title: string;
+  remindAt: string;
+  taskId: string | null;
+  status: string;
+  createdAt: string;
+  dueState: string;
+};
+
+export type ReminderDueCliResult =
+  | { ok: true; generatedAt: string; evaluatedAt: string; count: number; due: ReminderDueCliItem[]; source: Record<string, unknown> }
   | { ok: false; errorCode: string; message: string };
 
 const MAX_OUTPUT_BYTES = 64 * 1024;
@@ -228,6 +269,89 @@ export class PkosCliClient {
     ]);
   }
 
+  async reminderCreate(input: ReminderCreateInput): Promise<WritebackResult> {
+    const args = [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "reminder-create",
+      "--title",
+      input.title,
+      "--remind-at",
+      input.remindAt,
+      "--source",
+      input.source,
+      "--created-by",
+      input.createdBy,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ];
+    if (input.description) {
+      args.push("--description", input.description);
+    }
+    if (input.taskId) {
+      args.push("--task-id", input.taskId);
+    }
+    return this.runReminderWriteCommand("pkos.reminder.create", args);
+  }
+
+  async reminderAcknowledge(input: ReminderActionInput): Promise<WritebackResult> {
+    return this.runReminderWriteCommand("pkos.reminder.acknowledge", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "reminder-acknowledge",
+      "--id",
+      input.reminderId,
+      "--reason",
+      input.reason,
+      "--created-by",
+      input.createdBy,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ]);
+  }
+
+  async reminderCancel(input: ReminderActionInput): Promise<WritebackResult> {
+    return this.runReminderWriteCommand("pkos.reminder.cancel", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "reminder-cancel",
+      "--id",
+      input.reminderId,
+      "--reason",
+      input.reason,
+      "--created-by",
+      input.createdBy,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ]);
+  }
+
+  async reminderReschedule(input: ReminderRescheduleInput): Promise<WritebackResult> {
+    return this.runReminderWriteCommand("pkos.reminder.reschedule", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "reminder-reschedule",
+      "--id",
+      input.reminderId,
+      "--remind-at",
+      input.remindAt,
+      "--reason",
+      input.reason,
+      "--created-by",
+      input.createdBy,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ]);
+  }
+
   async inboxReviewList(filters: InboxReviewListFilters): Promise<InboxReviewCliListResult> {
     const args = ["-B", "-m", "tools.pkos", "inbox-review", "list", "--json"];
     if (filters.status) {
@@ -344,6 +468,81 @@ export class PkosCliClient {
     };
   }
 
+  async reminderList(filters: ReminderListFilters): Promise<ReminderCliListResult> {
+    const args = ["-B", "-m", "tools.pkos", "reminder-list", "--json"];
+    if (filters.status) {
+      args.push("--status", filters.status);
+    }
+    if (filters.taskId) {
+      args.push("--task-id", filters.taskId);
+    }
+    if (filters.limit !== undefined) {
+      args.push("--limit", String(filters.limit));
+    }
+
+    const result = await this.runRawCommand(args);
+    if (result.error) {
+      return result.error;
+    }
+    const payload = parseCliJson("pkos.reminder.list", result.result);
+    if (!payload) {
+      return { ok: false, errorCode: "cli_failed", message: "PKOS CLI returned invalid JSON" };
+    }
+    if (payload.ok === false) {
+      return {
+        ok: false,
+        errorCode: cliErrorCode(payload),
+        message: cliErrorMessage(payload, "PKOS CLI rejected reminder list"),
+      };
+    }
+    let items = normalizeReminderCliItems(payload.reminders);
+    if (filters.source) {
+      items = items.filter((item) => item.source === filters.source);
+    }
+    return {
+      ok: true,
+      generatedAt: stringValue(payload.generated_at),
+      count: items.length,
+      items,
+      source: isRecord(payload.source) ? payload.source : {},
+    };
+  }
+
+  async reminderDue(filters: { now?: string; limit?: number }): Promise<ReminderDueCliResult> {
+    const args = ["-B", "-m", "tools.pkos", "reminder-due", "--json"];
+    if (filters.now) {
+      args.push("--now", filters.now);
+    }
+    if (filters.limit !== undefined) {
+      args.push("--limit", String(filters.limit));
+    }
+
+    const result = await this.runRawCommand(args);
+    if (result.error) {
+      return result.error;
+    }
+    const payload = parseCliJson("pkos.reminder.due", result.result);
+    if (!payload) {
+      return { ok: false, errorCode: "cli_failed", message: "PKOS CLI returned invalid JSON" };
+    }
+    if (payload.ok === false) {
+      return {
+        ok: false,
+        errorCode: cliErrorCode(payload),
+        message: cliErrorMessage(payload, "PKOS CLI rejected reminder due query"),
+      };
+    }
+    const due = normalizeReminderDueCliItems(payload.due);
+    return {
+      ok: true,
+      generatedAt: stringValue(payload.generated_at),
+      evaluatedAt: stringValue(payload.evaluated_at),
+      count: due.length,
+      due,
+      source: isRecord(payload.source) ? payload.source : {},
+    };
+  }
+
   private async inboxReviewMark(operation: string, status: InboxReviewStatus, input: InboxReviewMarkInput): Promise<WritebackResult> {
     const args = [
       "-B",
@@ -440,6 +639,69 @@ export class PkosCliClient {
     });
   }
 
+  private async runReminderWriteCommand(operation: string, args: string[]): Promise<WritebackResult> {
+    const result = await this.runReminderCli(args);
+    const parsed = parseCliJsonStrict(result);
+    if (!parsed.ok && result.exitCode === 0 && !result.timedOut && !result.stdoutTruncated && !result.stderrTruncated && !result.spawnError) {
+      return this.reminderWriteResultFromCli(operation, await this.runReminderCli(args));
+    }
+    return this.reminderWriteResultFromCli(operation, result, parsed);
+  }
+
+  private runReminderCli(args: string[]): Promise<CliProcessRunResult> {
+    return this.runner.run({
+      executable: this.pythonBin,
+      args,
+      cwd: this.paths.coreRoot,
+      env: buildChildEnv(this.paths),
+      timeoutMs: this.timeoutMs,
+      maxStdoutBytes: MAX_OUTPUT_BYTES,
+      maxStderrBytes: MAX_OUTPUT_BYTES,
+    });
+  }
+
+  private reminderWriteResultFromCli(
+    operation: string,
+    result: CliProcessRunResult,
+    parsed: ReturnType<typeof parseCliJsonStrict> = parseCliJsonStrict(result),
+  ): WritebackResult {
+    if (result.timedOut) {
+      return errorResult({ operation, errorCode: "timeout", message: "PKOS CLI timed out" });
+    }
+    if (result.stdoutTruncated || result.stderrTruncated) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI output exceeded limit" });
+    }
+    if (result.spawnError) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI could not be started" });
+    }
+
+    if (!parsed.ok) {
+      if (result.exitCode !== 0) {
+        return errorResult({ operation, errorCode: "cli_exit_nonzero", message: `PKOS CLI exited with code ${result.exitCode ?? "unknown"}` });
+      }
+      return errorResult({ operation, errorCode: "cli_invalid_json", message: "PKOS CLI returned invalid reminder JSON" });
+    }
+    const payload = parsed.payload;
+    if (payload.ok === false) {
+      return errorResult({ operation, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, "PKOS CLI rejected reminder write") });
+    }
+    if (result.exitCode !== 0) {
+      return errorResult({ operation, errorCode: "cli_exit_nonzero", message: `PKOS CLI exited with code ${result.exitCode ?? "unknown"}` });
+    }
+    if (payload.ok !== true) {
+      return errorResult({ operation, errorCode: "cli_invalid_json", message: "PKOS CLI returned invalid reminder JSON" });
+    }
+    const action = isRecord(payload.action) ? payload.action : {};
+    const item = isRecord(payload.item) ? payload.item : {};
+    const reminder = isRecord(payload.reminder) ? payload.reminder : {};
+    return writtenResult({
+      operation,
+      recordId: stringValue(action.id) || stringValue(item.id) || stringValue(reminder.id) || undefined,
+      target: operation === "pkos.reminder.create" ? "reminders/items.jsonl" : "reminders/actions.jsonl",
+      message: `PKOS reminder write ${stringValue(payload.status) || "completed"}`,
+    });
+  }
+
   private async runRawCommand(args: string[]): Promise<
     | { result: CliProcessRunResult; error?: undefined }
     | { error: { ok: false; errorCode: string; message: string }; errorResult(operation: string): WritebackResult }
@@ -476,6 +738,18 @@ function parseCliJson(operation: string, result: CliProcessRunResult): Record<st
     return parsed as Record<string, unknown>;
   } catch {
     return { ok: false, operation };
+  }
+}
+
+function parseCliJsonStrict(result: CliProcessRunResult): { ok: true; payload: Record<string, unknown> } | { ok: false } {
+  try {
+    const parsed = JSON.parse(result.stdout.trim()) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { ok: false };
+    }
+    return { ok: true, payload: parsed as Record<string, unknown> };
+  } catch {
+    return { ok: false };
   }
 }
 
@@ -554,6 +828,41 @@ function normalizeTaskCliItems(value: unknown): TaskCliItem[] {
     latestReason: typeof item.latest_reason === "string" ? item.latest_reason : null,
     notesCount: typeof item.notes_count === "number" ? item.notes_count : 0,
     latestNoteAt: typeof item.latest_note_at === "string" ? item.latest_note_at : null,
+  }));
+}
+
+function normalizeReminderCliItems(value: unknown): ReminderCliItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isRecord).map((item) => ({
+    id: stringValue(item.id),
+    title: stringValue(item.title),
+    description: typeof item.description === "string" ? item.description : null,
+    remindAt: stringValue(item.remind_at),
+    taskId: typeof item.task_id === "string" ? item.task_id : null,
+    source: stringValue(item.source),
+    status: stringValue(item.status),
+    createdAt: stringValue(item.created_at),
+    createdBy: stringValue(item.created_by),
+    latestActionId: typeof item.latest_action_id === "string" ? item.latest_action_id : null,
+    latestActionAt: typeof item.latest_action_at === "string" ? item.latest_action_at : null,
+    latestReason: typeof item.latest_reason === "string" ? item.latest_reason : null,
+  }));
+}
+
+function normalizeReminderDueCliItems(value: unknown): ReminderDueCliItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isRecord).map((item) => ({
+    id: stringValue(item.id),
+    title: stringValue(item.title),
+    remindAt: stringValue(item.remind_at),
+    taskId: typeof item.task_id === "string" ? item.task_id : null,
+    status: stringValue(item.status),
+    createdAt: stringValue(item.created_at),
+    dueState: stringValue(item.due_state),
   }));
 }
 

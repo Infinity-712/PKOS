@@ -115,6 +115,12 @@ python -m tools.pkos task-create --title "..." --source manual --request-id "...
 python -m tools.pkos task-list --json
 python -m tools.pkos task-transition --task-id task_... --target-status in_progress --reason "..."
 python -m tools.pkos task-rebuild --json
+python -m tools.pkos reminder-create --title "..." --remind-at "2026-07-15T10:00:00Z" --request-id "..."
+python -m tools.pkos reminder-list --json
+python -m tools.pkos reminder-acknowledge --id reminder_... --reason "seen" --request-id "..."
+python -m tools.pkos reminder-cancel --id reminder_... --reason "cancelled" --request-id "..."
+python -m tools.pkos reminder-reschedule --id reminder_... --remind-at "2026-07-16T10:00:00Z" --reason "later" --request-id "..."
+python -m tools.pkos reminder-due --json
 ```
 
 `gen-flow` 会生成 `runtime/flow/*.json`。`export-agent-context` 会生成 `runtime/agent_context.json`，供月洛洛读取。二者都是只读派生命令，不修改 `objects/`、`docs/`、schema 或 trusted 状态。
@@ -183,6 +189,19 @@ python -m http.server 8000
 python -m tools.pkos export-site-data --profile demo
 python -m http.server 8000
 ```
+
+## Reminder v0.7-beta
+
+Reminder v0.7-beta is a separate human-managed one-shot authority. It writes only:
+
+- `reminders/items.jsonl`
+- `reminders/actions.jsonl`
+- `runtime/reminders/current.json`
+- `runtime/reminders/due.json`
+
+`task dueAt` never creates a reminder automatically. Reminder runtime delivery attempts live in Agent Server SQLite only as rebuildable runtime state; SQLite is not Reminder authority. Web Dashboard can create/list/acknowledge/cancel/reschedule reminders through fixed confirmed APIs. Desktop shows a due reminder runtime panel but does not create native OS notifications in this MVP.
+
+See `docs/REMINDER_CONTRACT.md`.
 
 ## Moonlolo Bridge CLI
 

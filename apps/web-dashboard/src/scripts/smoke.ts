@@ -25,6 +25,16 @@ import {
   stateStaleText,
 } from "../features/state/stateModel.js";
 import {
+  buildReminderQuery,
+  canSubmitReminderAction,
+  canSubmitReminderCreate,
+  canSubmitReminderReschedule,
+  createReminderActionDraft,
+  createReminderCreateDraft,
+  createReminderRescheduleDraft,
+  startOrReuseReminderAttempt,
+} from "../features/reminders/reminderModel.js";
+import {
   allowedTaskTransitions,
   buildTaskQuery,
   canSubmitTaskCreate,
@@ -37,7 +47,7 @@ import {
   beijingPartsToUtcIso,
   formatTaskDueAtBeijing,
 } from "../features/tasks/taskDue.js";
-import { isActionRequestListResponse, isAuditEventsResponse, isHealthResponse, isTaskListResponse } from "../lib/guards.js";
+import { isActionRequestListResponse, isAuditEventsResponse, isHealthResponse, isReminderListResponse, isTaskListResponse } from "../lib/guards.js";
 import { formatDateTime } from "@pkos/agent-client";
 
 const draft: ActionDraft = {
@@ -224,6 +234,91 @@ assert(beijingPartsToUtcIso(2026, 7, 15, 18, 0) === "2026-07-15T10:00:00.000Z", 
 assert(formatTaskDueAtBeijing("2026-07-15T10:00:00.000Z") === "2026-07-15 18:00", "UTC task due time was not shown as Beijing time");
 assert(formatDateTime("2026-07-12T03:04:05Z") === "2026-07-12 11:04:05", "shared time formatter regressed");
 
+const reminderQuery = buildReminderQuery({ status: "scheduled", taskId: "task.1", source: "web", limit: "20", title: "DO_NOT_PUT_REMINDER_TITLE_IN_URL" });
+assert(reminderQuery === "status=scheduled&taskId=task.1&source=web&limit=20", "reminder query builder failed");
+assert(reminderQuery.indexOf("title") === -1 && reminderQuery.indexOf("DO_NOT_PUT_REMINDER_TITLE_IN_URL") === -1, "reminder title leaked into query");
+const reminderCreateDraft = createReminderCreateDraft({
+  title: "WEB_REMINDER_TITLE",
+  description: "WEB_REMINDER_DESCRIPTION",
+  source: "web",
+  taskId: "task.1",
+  remindAt: "2026-07-15T10:00:00.000Z",
+});
+const reminderCreateAttempt = startOrReuseReminderAttempt(EMPTY_ATTEMPT, reminderCreateDraft, () => "reminder-request-1");
+assert(reminderCreateAttempt.frozenPayload?.endpoint === "/api/pkos/reminders", "reminder create endpoint was not fixed");
+assert(reminderCreateAttempt.frozenPayload?.body.title === "WEB_REMINDER_TITLE", "reminder create did not freeze title");
+assert(reminderCreateAttempt.frozenPayload?.body.confirmed === true, "reminder create button did not auto-confirm explicit mutation");
+const reminderBlankTaskDraft = createReminderCreateDraft({
+  title: "WEB_REMINDER_BLANK_TASK",
+  description: "",
+  source: "web",
+  taskId: "   ",
+  remindAt: beijingPartsToUtcIso(2026, 7, 15, 2, 0),
+});
+assert(reminderBlankTaskDraft.body.taskId === null, "blank reminder taskId was not normalized to null");
+assert(reminderBlankTaskDraft.body.remindAt === "2026-07-14T18:00:00.000Z", "Beijing reminder time did not convert to expected UTC ISO");
+const blankReminderAttempt = startOrReuseReminderAttempt(EMPTY_ATTEMPT, reminderBlankTaskDraft, () => "reminder-blank-task");
+assert(blankReminderAttempt.frozenPayload?.body.requestId === "reminder-blank-task", "blank task reminder requestId was not frozen");
+assert(blankReminderAttempt.frozenPayload?.body.taskId === null, "frozen blank reminder taskId was not null");
+const blankReminderRetry = startOrReuseReminderAttempt(
+  blankReminderAttempt,
+  createReminderCreateDraft({
+    title: "EDITED_REMINDER_BLANK_TASK_SHOULD_NOT_REPLACE_FROZEN_PAYLOAD",
+    description: "edited",
+    source: "web",
+    taskId: "task.edited",
+    remindAt: "2026-07-15T02:00:00.000Z",
+  }),
+  () => "reminder-blank-task-new",
+);
+assert(blankReminderRetry.requestId === "reminder-blank-task", "reminder Retry Same Request changed requestId");
+assert(blankReminderRetry.frozenPayload?.body.remindAt === "2026-07-14T18:00:00.000Z", "reminder Retry Same Request changed frozen remindAt");
+assert(blankReminderRetry.frozenPayload?.body.taskId === null, "reminder Retry Same Request changed frozen taskId");
+const reminderCreateRetry = startOrReuseReminderAttempt(
+  reminderCreateAttempt,
+  createReminderCreateDraft({
+    title: "EDITED_REMINDER_TITLE_SHOULD_NOT_REPLACE_FROZEN_PAYLOAD",
+    description: "edited",
+    source: "web",
+    taskId: "",
+    remindAt: null,
+  }),
+  () => "reminder-request-2",
+);
+assert(reminderCreateRetry.requestId === "reminder-request-1", "reminder create retry changed requestId");
+assert(reminderCreateRetry.frozenPayload?.body.title === "WEB_REMINDER_TITLE", "reminder create retry changed frozen payload");
+assert(canSubmitReminderCreate({ title: "x", description: "", source: "web", taskId: "", remindAt: "2026-07-15T10:00:00Z" }), "valid reminder create was not submittable");
+assert(!canSubmitReminderCreate({ title: "", description: "", source: "web", taskId: "", remindAt: "2026-07-15T10:00:00Z" }), "empty reminder title was submittable");
+assert(!canSubmitReminderCreate({ title: "x", description: "", source: "web", taskId: "", remindAt: null }), "missing remindAt was submittable");
+const reminderAckDraft = createReminderActionDraft("acknowledge", { reminderId: "reminder.1", reason: "seen" });
+const reminderAckAttempt = startOrReuseReminderAttempt(EMPTY_ATTEMPT, reminderAckDraft, () => "reminder-ack-1");
+assert(reminderAckAttempt.frozenPayload?.endpoint === "/api/pkos/reminders/reminder.1/acknowledge", "reminder acknowledge endpoint was not fixed");
+assert(reminderAckAttempt.frozenPayload?.body.reason === "seen", "reminder acknowledge did not freeze reason");
+assert(reminderAckAttempt.frozenPayload?.body.confirmed === true, "reminder acknowledge did not auto-confirm explicit mutation");
+assert(reminderAckAttempt.frozenPayload?.body.reminderId === undefined, "reminder id leaked into acknowledge request body");
+const reminderCancelAttempt = startOrReuseReminderAttempt(EMPTY_ATTEMPT, createReminderActionDraft("cancel", { reminderId: "reminder.1", reason: "drop" }), () => "reminder-cancel-1");
+assert(reminderCancelAttempt.frozenPayload?.endpoint === "/api/pkos/reminders/reminder.1/cancel", "reminder cancel endpoint was not fixed");
+const reminderRescheduleAttempt = startOrReuseReminderAttempt(
+  EMPTY_ATTEMPT,
+  createReminderRescheduleDraft({ reminderId: "reminder.1", remindAt: "2026-07-16T10:00:00Z", reason: "later" }),
+  () => "reminder-reschedule-1",
+);
+assert(reminderRescheduleAttempt.frozenPayload?.endpoint === "/api/pkos/reminders/reminder.1/reschedule", "reminder reschedule endpoint was not fixed");
+assert(reminderRescheduleAttempt.frozenPayload?.body.reminderId === undefined, "reminder id leaked into reschedule request body");
+assert(canSubmitReminderAction({ reminderId: "reminder.1", reason: "seen" }), "valid reminder action was not submittable");
+assert(!canSubmitReminderAction({ reminderId: "reminder.1", reason: "" }), "empty reminder action reason was submittable");
+assert(canSubmitReminderReschedule({ reminderId: "reminder.1", reason: "later", remindAt: "2026-07-16T10:00:00Z" }), "valid reminder reschedule was not submittable");
+assert(!canSubmitReminderReschedule({ reminderId: "reminder.1", reason: "later", remindAt: null }), "missing reschedule time was submittable");
+const reminderCliFailureAttempt = applySubmitResponse(reminderCreateAttempt, {
+  ok: false,
+  requestId: "reminder-request-1",
+  replayed: false,
+  result: { status: "error", operation: "pkos.reminder.create", errorCode: "cli_invalid_json" },
+});
+const reminderCliFailureResult = reminderCliFailureAttempt.lastResponse?.result as { errorCode?: string } | undefined;
+assert(reminderCliFailureAttempt.status === "cli_failed", "reminder cli_invalid_json should remain a CLI failure status");
+assert(reminderCliFailureResult?.errorCode === "cli_invalid_json", "reminder safe CLI subcode was not retained for display");
+
 assert(isHealthResponse({ ok: true, service: "pkos-agent-server", mode: "dry-run" }), "health guard failed");
 assert(
   isActionRequestListResponse({
@@ -287,6 +382,32 @@ assert(
   }),
   "task list guard failed",
 );
+assert(
+  isReminderListResponse({
+    ok: true,
+    count: 1,
+    generatedAt: "2026-07-13T00:00:00Z",
+    filters: {},
+    items: [
+      {
+        id: "reminder.1",
+        title: "Reminder",
+        description: null,
+        remindAt: "2026-07-15T10:00:00Z",
+        taskId: null,
+        source: "web",
+        status: "scheduled",
+        createdAt: "2026-07-13T00:00:00Z",
+        createdBy: "human",
+        latestActionId: null,
+        latestActionAt: null,
+        latestReason: null,
+      },
+    ],
+    source: {},
+  }),
+  "reminder list guard failed",
+);
 const unicodeTaskListPayload = {
   ok: true,
   count: 1,
@@ -333,6 +454,7 @@ assert(!sourceContains("I confirm this is a human-created formal task."), "task 
 assert(!sourceContains("I confirm this explicit transition."), "task transition confirm checkbox copy still exists");
 assert(!sourceContains("task-note"), "task note UI/model path still exists");
 assert(sourceContains("Tasks"), "Tasks tab/page source is missing");
+assert(sourceContains("Reminders"), "Reminders tab/page source is missing");
 assert(sourceContains("Agent cannot automatically create, complete, or reorder formal tasks."), "task authority boundary copy is missing");
 console.log("WEB_DASHBOARD_SMOKE_OK");
 

@@ -18,7 +18,7 @@ This package provides the first PKOS-native Agent Runtime skeleton:
 
 ## Non-goals
 
-This skeleton does not implement tool calling, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, OpenClaw, WeChat, Agent-created tasks, reminder scheduling, trusted migration, durable agent memory, or object mutation.
+This skeleton does not implement tool calling, automatic tool selection, a public tool execution endpoint, RAG, MCP, multi-agent orchestration, sandboxed shell execution, OpenClaw, WeChat, Agent-created tasks, recurring reminder scheduling, task dueAt auto-reminders, trusted migration, durable agent memory, or object mutation.
 
 ## SQLite Driver
 
@@ -78,6 +78,8 @@ npm run provider-config-smoke
 npm run provider-profile-smoke
 npm run chat-history-smoke
 npm run runtime-identity-smoke
+npm run reminder-api-smoke
+npm run reminder-scheduler-smoke
 npm run dev
 ```
 
@@ -102,6 +104,17 @@ npm run dev
 task creation, status transitions, request replay/conflict, stale running
 recovery, restart rebuild, PKOS_DATA_ROOT separation, CLI failure handling, and
 audit redaction for task title/description/reason text.
+
+`npm run reminder-api-smoke` verifies the fixed Reminder API against a temporary
+`PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI. It covers
+one-shot reminder creation, task-linked reminders, acknowledge/cancel/reschedule
+actions, request replay/conflict, restart rebuild, CLI failure handling, and
+audit redaction for reminder title/description/reason text.
+
+`npm run reminder-scheduler-smoke` verifies the SQLite runtime delivery ledger.
+It covers due reminder discovery, duplicate scan dedupe, restart persistence,
+SQLite deletion recovery from JSONL authority, scheduler_run events, and the
+rule that scheduler scans do not write Reminder authority logs.
 
 `npm run llm-readonly-smoke` verifies the real-provider read-only MVP against a local fake Chat Completions server. It does not call an external model. It covers dry-run default behavior, provider configuration validation, per-request external consent, bounded prompt assembly, SSE streaming, tool output rejection, safe error mapping, abort semantics, terminal generation state, and secret redaction.
 
@@ -148,6 +161,7 @@ Current migrations:
 - `0003_action_request_resolutions.sql`: adds append-only human resolution audit for indeterminate action requests;
 - `0004_generation_provider_metadata.sql`: adds safe provider/model/finish/token/error metadata columns for generations;
 - `0005_provider_runtime_selection.sql`: adds runtime provider selection, provider connection status, and generation provider snapshot columns.
+- `0006_reminder_delivery_attempts.sql`: adds runtime-only Reminder delivery attempts keyed by reminder id, runtime fingerprint, and delivery channel.
 
 Each migration runs inside a SQLite transaction and advances `user_version` only after the SQL succeeds. If a migration fails, startup fails and write APIs are not available from that database handle. Existing skeleton databases with tables but `user_version = 0` are upgraded safely because migrations use idempotent `CREATE ... IF NOT EXISTS` statements. Version 2 and 3 databases are upgraded without dropping `action_requests`, `tool_calls`, `agent_events`, `chat_messages`, or existing generation rows.
 

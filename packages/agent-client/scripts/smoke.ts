@@ -8,6 +8,7 @@ import {
   isHealthResponse,
   isChatMessageListResponse,
   isRuntimeInfoResponse,
+  isRuntimeReminderNotificationsResponse,
   isSuccessfulAttempt,
   isAgentEvent,
   parseNdjsonStream,
@@ -154,6 +155,8 @@ assert(taskTransition.frozenPayload?.body.taskId === "task.1", "task transition 
 
 const taskInvalid = applySubmitError(taskTransition, { code: "invalid_transition", message: "invalid" });
 assert(taskInvalid.status === "invalid_input", "task validation error was not mapped to invalid_input");
+const reminderInvalidTime = applySubmitError(taskTransition, { code: "invalid_remind_at", message: "invalid remindAt" });
+assert(reminderInvalidTime.status === "invalid_input", "reminder invalid_remind_at was not mapped to invalid_input");
 
 assert(resolveAgentApiUrl("http://127.0.0.1:8790/", "/health") === "http://127.0.0.1:8790/health", "base URL slash normalization failed");
 assert(resolveAgentApiUrl("", "health") === "/health", "same-origin endpoint normalization failed");
@@ -260,6 +263,29 @@ const client = new AgentApiClient({
     if (url.includes("/api/pkos/state-timeline")) {
       return jsonResponse({ current: null, items: [], count: 0, filters: { limit: 1 } });
     }
+    if (url.endsWith("/api/runtime/reminder-notifications?limit=5")) {
+      return jsonResponse({
+        ok: true,
+        generatedAt: "2026-07-13T00:00:00Z",
+        evaluatedAt: "2026-07-13T00:00:00Z",
+        count: 1,
+        notifications: [
+          {
+            id: "delivery.1",
+            reminderId: "reminder.1",
+            remindAt: "2026-07-13T00:00:00Z",
+            runtimeFingerprint: "runtime123456",
+            deliveryChannel: "desktop_panel",
+            deliveryState: "pending",
+            firstSeenAt: "2026-07-13T00:00:01Z",
+            lastAttemptAt: "2026-07-13T00:00:01Z",
+            attemptCount: 1,
+            acknowledgedInRuntimeAt: null,
+            errorCode: null,
+          },
+        ],
+      });
+    }
     if (url.endsWith("/api/actions/inbox-append") || url.endsWith("/api/actions/state-append")) {
       return jsonResponse({ ok: true, requestId: "request-1", replayed: false, result: { status: "written", operation: "pkos.append" } });
     }
@@ -304,6 +330,11 @@ assert(history.items.length === 2, "chat history did not return expected message
 assert(history.items[1]?.role === "assistant" && history.items[1].generationId === "g1", "chat history did not preserve assistant generationId");
 assert(!isChatMessageListResponse({ sessionId: "s1", items: [{ ...history.items[0], role: "system" }], nextBefore: null }), "chat history guard accepted illegal role");
 await client.getStateTimeline({ limit: 1 });
+const runtimeReminderNotifications = await client.getRuntimeReminderNotifications({ limit: 5 });
+assert(runtimeReminderNotifications.count === 1, "runtime reminder notification client returned wrong count");
+assert(runtimeReminderNotifications.notifications[0]?.reminderId === "reminder.1", "runtime reminder notification client lost reminderId");
+assert(isRuntimeReminderNotificationsResponse(runtimeReminderNotifications), "runtime reminder notification guard rejected canonical payload");
+assert(!isRuntimeReminderNotificationsResponse({ ...runtimeReminderNotifications, notifications: [{ reminderId: "missing fields" }] }), "runtime reminder notification guard accepted invalid item");
 await client.inboxAppend({ requestId: "request-1", captureType: "note", content: "hello", source: "web", status: "unprocessed", tags: [], metadata: {} });
 await client.stateAppend({
   requestId: "request-1",

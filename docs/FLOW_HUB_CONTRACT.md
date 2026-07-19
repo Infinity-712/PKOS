@@ -26,6 +26,7 @@ Flow Hub may not:
 - `inbox_item`
 - `state_snapshot`
 - `task`
+- `reminder`
 - `review_item`
 - `review_log`
 - `recovery_log`
@@ -141,6 +142,7 @@ Flow Hub MVP requires these directories:
 - `inbox/`
 - `state/`
 - `tasks/`
+- `reminders/`
 - `runtime/`
 - `runtime/flow/`
 
@@ -154,6 +156,13 @@ Flow Hub MVP requires:
 - `python -m tools.pkos task-create`
 - `python -m tools.pkos task-transition`
 - `python -m tools.pkos task-rebuild`
+- `python -m tools.pkos reminder-create`
+- `python -m tools.pkos reminder-list`
+- `python -m tools.pkos reminder-acknowledge`
+- `python -m tools.pkos reminder-cancel`
+- `python -m tools.pkos reminder-reschedule`
+- `python -m tools.pkos reminder-due`
+- `python -m tools.pkos reminder-rebuild`
 - `python -m tools.pkos gen-flow`
 - `python -m tools.pkos export-agent-context`
 
@@ -167,6 +176,7 @@ Flow Hub MVP requires:
 - `runtime/flow/recovery_queue.json`
 - `runtime/flow/writing_queue.json`
 - `runtime/flow/task_summary.json`
+- `runtime/flow/reminder_summary.json`
 - `runtime/flow/flow_budget.json`
 
 `export-agent-context` must generate:
@@ -185,6 +195,8 @@ Future append-only files include:
 - `state/snapshots.jsonl`
 - `tasks/items.jsonl`
 - `tasks/actions.jsonl`
+- `reminders/items.jsonl`
+- `reminders/actions.jsonl`
 - `review/logs/*`
 
 This MVP implements append-only writes for `inbox/items.jsonl`,
@@ -214,6 +226,13 @@ Task commands may write only:
 - `tasks/actions.jsonl`
 - `runtime/tasks/current.json`
 
+Reminder commands may write only:
+
+- `reminders/items.jsonl`
+- `reminders/actions.jsonl`
+- `runtime/reminders/current.json`
+- `runtime/reminders/due.json`
+
 These commands must not write:
 
 - `objects/`
@@ -240,10 +259,15 @@ It must not contain the whole repository. It should include only:
 - operational_skills, currently empty if not implemented
 - retrieved_objects, currently empty because RAG is not implemented
 - task_summary with bounded counts/source hashes only
+- reminder_summary with bounded counts/source hashes only
 
 `task_summary` may include counts, overdue count, next due timestamp, source
 counts, and source hashes. It must not include full task title, description,
 reason, or note by default.
+
+`reminder_summary` may include scheduled/acknowledged/cancelled/due/upcoming
+counts, the next reminder timestamp, source counts, and source hashes. It must
+not include full reminder title, description, or action reason by default.
 
 ### MVP Acceptance
 

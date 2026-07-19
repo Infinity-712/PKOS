@@ -1,5 +1,6 @@
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput } from "../tools/builtin/inboxReview.js";
+import type { ReminderActionInput, ReminderCreateInput, ReminderRescheduleInput } from "../tools/builtin/reminderFlow.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
 import type { TaskCreateInput, TaskTransitionInput } from "../tools/builtin/taskFlow.js";
 import type { RegisteredToolDefinition, ToolExecutionContext } from "../tools/ToolTypes.js";
@@ -13,6 +14,10 @@ const DIRECT_WRITE_TOOLS = new Set([
   "pkos.state.append",
   "pkos.task.create",
   "pkos.task.transition",
+  "pkos.reminder.create",
+  "pkos.reminder.acknowledge",
+  "pkos.reminder.cancel",
+  "pkos.reminder.reschedule",
 ]);
 
 export class WritebackRouter {
@@ -51,6 +56,18 @@ export class WritebackRouter {
     }
     if (tool.name === "pkos.task.transition") {
       return this.cli.taskTransition(input as TaskTransitionInput);
+    }
+    if (tool.name === "pkos.reminder.create") {
+      return this.cli.reminderCreate(input as ReminderCreateInput);
+    }
+    if (tool.name === "pkos.reminder.acknowledge") {
+      return this.cli.reminderAcknowledge(input as ReminderActionInput);
+    }
+    if (tool.name === "pkos.reminder.cancel") {
+      return this.cli.reminderCancel(input as ReminderActionInput);
+    }
+    if (tool.name === "pkos.reminder.reschedule") {
+      return this.cli.reminderReschedule(input as ReminderRescheduleInput);
     }
 
     return Promise.resolve(

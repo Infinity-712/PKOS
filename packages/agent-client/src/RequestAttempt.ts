@@ -6,7 +6,11 @@ export type CaptureActionName =
   | "inbox-review-archive"
   | "inbox-review-restore"
   | "task-create"
-  | "task-transition";
+  | "task-transition"
+  | "reminder-create"
+  | "reminder-acknowledge"
+  | "reminder-cancel"
+  | "reminder-reschedule";
 
 export type ActionAttemptStatus =
   | "draft"
@@ -125,6 +129,18 @@ function endpointForAction(draft: ActionDraft): string {
   if (draft.actionName === "task-transition" && typeof draft.body.taskId === "string") {
     return `/api/pkos/tasks/${encodeURIComponent(draft.body.taskId)}/transition`;
   }
+  if (draft.actionName === "reminder-create") {
+    return "/api/pkos/reminders";
+  }
+  if (draft.actionName === "reminder-acknowledge" && typeof draft.body.reminderId === "string") {
+    return `/api/pkos/reminders/${encodeURIComponent(draft.body.reminderId)}/acknowledge`;
+  }
+  if (draft.actionName === "reminder-cancel" && typeof draft.body.reminderId === "string") {
+    return `/api/pkos/reminders/${encodeURIComponent(draft.body.reminderId)}/cancel`;
+  }
+  if (draft.actionName === "reminder-reschedule" && typeof draft.body.reminderId === "string") {
+    return `/api/pkos/reminders/${encodeURIComponent(draft.body.reminderId)}/reschedule`;
+  }
   return "/api/actions/invalid";
 }
 
@@ -155,11 +171,14 @@ function statusFromErrorCode(code: string): ActionAttemptStatus {
     code === "invalid_transition" ||
     code === "invalid_status" ||
     code === "invalid_due_at" ||
+    code === "invalid_remind_at" ||
     code === "invalid_priority" ||
     code === "invalid_title" ||
     code === "invalid_reason" ||
     code === "invalid_note" ||
-    code === "task_not_found"
+    code === "task_not_found" ||
+    code === "invalid_task_reference" ||
+    code === "reminder_not_found"
   ) {
     return "invalid_input";
   }

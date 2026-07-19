@@ -104,6 +104,34 @@ const ACTIONS: ActionConfig[] = [
     allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "targetStatus", "reason", "createdBy"]),
     normalize: normalizeTaskTransition,
   },
+  {
+    actionName: "pkos.reminder.create",
+    toolName: "pkos.reminder.create",
+    pathname: "/api/pkos/reminders",
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "title", "description", "remindAt", "taskId", "source", "createdBy"]),
+    normalize: normalizeReminderCreate,
+  },
+  {
+    actionName: "pkos.reminder.acknowledge",
+    toolName: "pkos.reminder.acknowledge",
+    match: matchReminderAcknowledge,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "reason", "createdBy"]),
+    normalize: normalizeReminderAction,
+  },
+  {
+    actionName: "pkos.reminder.cancel",
+    toolName: "pkos.reminder.cancel",
+    match: matchReminderCancel,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "reason", "createdBy"]),
+    normalize: normalizeReminderAction,
+  },
+  {
+    actionName: "pkos.reminder.reschedule",
+    toolName: "pkos.reminder.reschedule",
+    match: matchReminderReschedule,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "remindAt", "reason", "createdBy"]),
+    normalize: normalizeReminderReschedule,
+  },
 ];
 
 export async function handleActionRoutes(req: IncomingMessage, res: ServerResponse, deps: ActionRouteDeps): Promise<boolean> {
@@ -412,6 +440,65 @@ function normalizeTaskTransition(input: Record<string, unknown>, routeParams: Re
   };
 }
 
+function normalizeReminderCreate(input: Record<string, unknown>): ActionRequest {
+  const base = normalizeBase(input);
+  const remindAt = normalizeReminderCreateRemindAt(limitedString(input.remindAt, "remindAt", { required: true, maxChars: MAX_REFERENCE_CHARS }));
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      title: limitedString(input.title, "title", { required: true, maxChars: MAX_TITLE_CHARS }),
+      description: limitedString(input.description, "description", { required: false, maxChars: MAX_DESCRIPTION_CHARS }),
+      remindAt,
+      taskId: limitedString(input.taskId, "taskId", { required: false, maxChars: MAX_REFERENCE_CHARS }) ?? null,
+      source: input.source,
+      createdBy: limitedString(input.createdBy, "createdBy", { required: false, maxChars: MAX_REFERENCE_CHARS }),
+    },
+  };
+}
+
+function normalizeReminderCreateRemindAt(value: string): string {
+  const timezoneAwareIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+  if (!timezoneAwareIso.test(value)) {
+    throw new ActionInputError("invalid_remind_at", "remindAt must be a timezone-aware ISO timestamp");
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ActionInputError("invalid_remind_at", "remindAt must be a valid timezone-aware ISO timestamp");
+  }
+  return parsed.toISOString();
+}
+
+function normalizeReminderAction(input: Record<string, unknown>, routeParams: Record<string, string>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      reminderId: routeParams.reminderId,
+      reason: limitedString(input.reason, "reason", { required: true, maxChars: MAX_REASON_CHARS }),
+      createdBy: limitedString(input.createdBy, "createdBy", { required: false, maxChars: MAX_REFERENCE_CHARS }),
+    },
+  };
+}
+
+function normalizeReminderReschedule(input: Record<string, unknown>, routeParams: Record<string, string>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      reminderId: routeParams.reminderId,
+      remindAt: limitedString(input.remindAt, "remindAt", { required: true, maxChars: MAX_REFERENCE_CHARS }),
+      reason: limitedString(input.reason, "reason", { required: true, maxChars: MAX_REASON_CHARS }),
+      createdBy: limitedString(input.createdBy, "createdBy", { required: false, maxChars: MAX_REFERENCE_CHARS }),
+    },
+  };
+}
+
 function normalizeBase(input: Record<string, unknown>): Omit<ActionRequest, "toolInput"> {
   const requestId = limitedString(input.requestId, "requestId", { required: true, maxChars: MAX_REQUEST_ID_CHARS });
   return {
@@ -544,12 +631,18 @@ function statusForResult(result: WritebackResult): number {
     result.errorCode === "invalid_transition" ||
     result.errorCode === "invalid_status" ||
     result.errorCode === "invalid_due_at" ||
+    result.errorCode === "invalid_remind_at" ||
     result.errorCode === "invalid_priority" ||
     result.errorCode === "invalid_title" ||
     result.errorCode === "invalid_reason" ||
-    result.errorCode === "task_not_found"
+    result.errorCode === "task_not_found" ||
+    result.errorCode === "invalid_task_reference" ||
+    result.errorCode === "reminder_not_found"
   ) {
     return 400;
+  }
+  if (result.errorCode === "idempotency_conflict") {
+    return 409;
   }
   if (result.errorCode === "timeout") {
     return 504;
@@ -664,4 +757,19 @@ function matchInboxReviewRestore(pathname: string): Record<string, string> | nul
 function matchTaskTransition(pathname: string): Record<string, string> | null {
   const match = /^\/api\/pkos\/tasks\/([^/]+)\/transition$/.exec(pathname);
   return match ? { taskId: decodeURIComponent(match[1]) } : null;
+}
+
+function matchReminderAcknowledge(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/reminders\/([^/]+)\/acknowledge$/.exec(pathname);
+  return match ? { reminderId: decodeURIComponent(match[1]) } : null;
+}
+
+function matchReminderCancel(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/reminders\/([^/]+)\/cancel$/.exec(pathname);
+  return match ? { reminderId: decodeURIComponent(match[1]) } : null;
+}
+
+function matchReminderReschedule(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/reminders\/([^/]+)\/reschedule$/.exec(pathname);
+  return match ? { reminderId: decodeURIComponent(match[1]) } : null;
 }

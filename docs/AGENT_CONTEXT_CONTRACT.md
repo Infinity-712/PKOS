@@ -142,7 +142,11 @@ Possible future sources:
 - future adapter output;
 - reminder scheduler state.
 
-PKOS core v0.5-beta design must not directly read OpenClaw secrets or uncontrolled runtime files. First implementation may set this field to `null`.
+PKOS core must not directly read OpenClaw secrets or uncontrolled runtime files.
+v0.7-beta adds one-shot Reminder authority and a runtime scheduler ledger, but
+ordinary Agent Context remains bounded. It may include reminder counts/source
+hashes through Flow Hub summaries; it must not include raw reminder title,
+description, or reason text by default.
 
 Suggested shape:
 

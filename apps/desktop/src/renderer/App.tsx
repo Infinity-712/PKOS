@@ -106,7 +106,7 @@ export function App() {
         />
       ) : null}
       {tab === "capture" ? <CapturePage client={client} onStateWritten={() => void refreshStatus()} /> : null}
-      {tab === "status" ? <StatusPage health={health} runtimeInfo={runtimeInfo} current={currentState} onRefresh={() => void refreshStatus()} /> : null}
+      {tab === "status" ? <StatusPage client={client} health={health} runtimeInfo={runtimeInfo} current={currentState} onRefresh={() => void refreshStatus()} /> : null}
     </main>
   );
 }

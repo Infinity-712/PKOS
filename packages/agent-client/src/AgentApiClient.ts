@@ -11,6 +11,7 @@ import {
   isProviderProfilesResponse,
   isRecord,
   isRuntimeInfoResponse,
+  isRuntimeReminderNotificationsResponse,
   isStateTimelineResponse,
 } from "./guards.js";
 import { parseNdjsonStream } from "./NdjsonStreamParser.js";
@@ -29,6 +30,8 @@ import type {
   ProviderStatusResponse,
   ProviderProfilesResponse,
   RuntimeInfoResponse,
+  RuntimeReminderNotificationFilters,
+  RuntimeReminderNotificationsResponse,
   SetProviderSelectionInput,
   SendChatMessageInput,
   StateAppendRequest,
@@ -137,6 +140,21 @@ export class AgentApiClient {
     }
     const query = params.toString();
     return this.get(`/api/pkos/state-timeline${query ? `?${query}` : ""}`, isStateTimelineResponse, signal);
+  }
+
+  getRuntimeReminderNotifications(
+    filters: RuntimeReminderNotificationFilters = {},
+    signal?: AbortSignal,
+  ): Promise<RuntimeReminderNotificationsResponse> {
+    const params = new URLSearchParams();
+    if (filters.now) {
+      params.set("now", filters.now);
+    }
+    if (filters.limit !== undefined) {
+      params.set("limit", String(filters.limit));
+    }
+    const query = params.toString();
+    return this.get(`/api/runtime/reminder-notifications${query ? `?${query}` : ""}`, isRuntimeReminderNotificationsResponse, signal);
   }
 
   abortGeneration(generationId: string, signal?: AbortSignal): Promise<AbortGenerationResponse> {

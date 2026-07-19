@@ -334,6 +334,25 @@ textarea {
   padding-top: 12px;
 }
 
+.reminder-notification-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reminder-notification-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dde3df;
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: #fbfcfb;
+}
+
 @media (max-width: 900px) {
   .topbar,
   .section-heading,
@@ -347,7 +366,8 @@ textarea {
   .compact-grid,
   .session-header,
   .provider-controls,
-  .kv-list {
+  .kv-list,
+  .reminder-notification-list li {
     grid-template-columns: 1fr;
   }
 }

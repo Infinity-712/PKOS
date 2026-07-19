@@ -7,9 +7,12 @@ import { ContextBuilder } from "../context/ContextBuilder.js";
 import { openAgentDatabase, type AgentDatabase } from "../db/connection.js";
 import { EventStore } from "../events/EventStore.js";
 import { handleInboxReviewRoutes } from "../pkos/InboxReviewRoutes.js";
+import { handleReminderRoutes } from "../pkos/ReminderRoutes.js";
 import { handleStateTimelineRoutes } from "../pkos/StateTimelineRoutes.js";
 import { handleTaskRoutes } from "../pkos/TaskRoutes.js";
 import { ProviderProfileRegistry } from "../providers/registry/ProviderProfileRegistry.js";
+import { handleReminderRuntimeRoutes } from "../reminders/ReminderRuntimeRoutes.js";
+import { ReminderScheduler } from "../reminders/ReminderScheduler.js";
 import { GenerationManager } from "../runtime/GenerationManager.js";
 import { AgentRunner } from "../runtime/AgentRunner.js";
 import { buildRuntimeIdentity, createHealthPayload, createRuntimeInfoPayload, type RuntimeIdentity } from "../runtime/RuntimeIdentity.js";
@@ -34,6 +37,7 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
   const writebackRouter = new WritebackRouter();
   const toolExecutor = new ToolExecutor(db, registry, writebackRouter, events);
   const runtimeIdentity = options.runtimeIdentity ?? buildRuntimeIdentity({ paths: resolveAgentPaths() });
+  const reminderScheduler = new ReminderScheduler(db, runtimeIdentity, { events });
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
@@ -52,11 +56,19 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
         return;
       }
 
+      if (await handleReminderRuntimeRoutes(req, res, reminderScheduler)) {
+        return;
+      }
+
       if (await handleChatRoutes(req, res, { db, runner, contextBuilder })) {
         return;
       }
 
       if (await handleTaskRoutes(req, res)) {
+        return;
+      }
+
+      if (await handleReminderRoutes(req, res)) {
         return;
       }
 

@@ -60,7 +60,7 @@ function testFreshMigration(): void {
   const env = useDataRoot("fresh-migration");
   const db = openAgentDatabase(env);
   try {
-    assertUserVersion(db, 5);
+    assertUserVersion(db, 6);
     for (const table of ["chat_sessions", "chat_messages", "generations", "agent_events", "tool_calls", "action_requests", "action_request_resolutions"]) {
       assert(tableExists(db, table), `fresh database missing table ${table}`);
     }
@@ -91,7 +91,7 @@ function testExistingDatabaseMigration(): void {
 
   const migrated = openAgentDatabase(env);
   try {
-    assertUserVersion(migrated, 5);
+    assertUserVersion(migrated, 6);
     assert(tableExists(migrated, "action_requests"), "existing database did not get action_requests");
     assert(tableExists(migrated, "action_request_resolutions"), "existing database did not get action_request_resolutions");
     const row = migrated.prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE id = ?").get("legacy-message") as CountRow;

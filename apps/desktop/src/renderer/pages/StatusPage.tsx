@@ -1,8 +1,9 @@
-import type { HealthResponse, RuntimeInfoResponse, StateTimelineItem } from "@pkos/agent-client";
+import type { AgentApiClient, HealthResponse, RuntimeInfoResponse, StateTimelineItem } from "@pkos/agent-client";
 import { backendStatusFromHealth } from "../features/chat/chatModel.js";
+import { ReminderNotificationsCard } from "../features/reminders/ReminderNotificationsCard.js";
 import { CurrentStateCard } from "../features/state/CurrentStateCard.js";
 
-export function StatusPage(props: { health: HealthResponse | null; runtimeInfo: RuntimeInfoResponse | null; current: StateTimelineItem | null; onRefresh: () => void }) {
+export function StatusPage(props: { client: AgentApiClient; health: HealthResponse | null; runtimeInfo: RuntimeInfoResponse | null; current: StateTimelineItem | null; onRefresh: () => void }) {
   const status = backendStatusFromHealth(props.health);
   const runtimeMismatch =
     typeof props.health?.runtimeFingerprint === "string" &&
@@ -43,6 +44,7 @@ export function StatusPage(props: { health: HealthResponse | null; runtimeInfo: 
         {!status.connected ? <p className="notice">请先启动 PKOS Agent Server。</p> : null}
       </section>
       <CurrentStateCard item={props.current} />
+      <ReminderNotificationsCard client={props.client} connected={status.connected} />
     </section>
   );
 }

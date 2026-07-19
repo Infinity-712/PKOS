@@ -124,3 +124,27 @@ export type TaskListResponse = {
   filters: JsonObject;
   source: JsonObject;
 };
+
+export type ReminderItem = {
+  id: string;
+  title: string;
+  description: string | null;
+  remindAt: string;
+  taskId: string | null;
+  source: string;
+  status: string;
+  createdAt: string;
+  createdBy: string;
+  latestActionId: string | null;
+  latestActionAt: string | null;
+  latestReason: string | null;
+};
+
+export type ReminderListResponse = {
+  ok: boolean;
+  items: ReminderItem[];
+  count: number;
+  generatedAt: string;
+  filters: JsonObject;
+  source: JsonObject;
+};

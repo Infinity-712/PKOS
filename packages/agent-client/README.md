@@ -28,11 +28,17 @@ Covered APIs:
 - `POST /api/actions/inbox-append`
 - `POST /api/actions/state-append`
 - `GET /api/pkos/state-timeline`
+- `GET /api/runtime/reminder-notifications`
 - fixed request-attempt endpoint mapping for `POST /api/pkos/tasks`
 - fixed request-attempt endpoint mapping for `POST /api/pkos/tasks/:taskId/transition`
+- fixed request-attempt endpoint mapping for `POST /api/pkos/reminders`
+- fixed request-attempt endpoint mapping for `POST /api/pkos/reminders/:reminderId/acknowledge`
+- fixed request-attempt endpoint mapping for `POST /api/pkos/reminders/:reminderId/cancel`
+- fixed request-attempt endpoint mapping for `POST /api/pkos/reminders/:reminderId/reschedule`
 
 Web-only authority management surfaces such as Inbox Review, Action Resolution, and Audit can keep their local client code.
 Task note endpoint mapping is intentionally not exposed; current v0.7-alpha task notes are legacy-compatible authority events only.
+Reminder runtime notifications are read-only runtime state. The shared client does not create native notifications and does not write Reminder authority.
 
 ## Behavior
 

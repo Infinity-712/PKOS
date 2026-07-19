@@ -60,6 +60,17 @@ from tools.inbox_review.review import (
     run_list as run_inbox_review_list,
     run_mark as run_inbox_review_mark,
 )
+from tools.reminder_flow.reminders import (
+    STATUSES as REMINDER_STATUSES,
+    ReminderFlowError,
+    normalize_remind_at,
+    rebuild_current_view as rebuild_reminder_current_view,
+    rebuild_due_view as rebuild_reminder_due_view,
+    run_action as run_reminder_action,
+    run_create as run_reminder_create,
+    run_get as run_reminder_get,
+    run_list as run_reminder_list,
+)
 from tools.task_flow.tasks import (
     PRIORITIES as TASK_PRIORITIES,
     STATUSES as TASK_STATUSES,
@@ -96,6 +107,14 @@ COMMAND_NAMES = {
     "task-list",
     "task-transition",
     "task-rebuild",
+    "reminder-create",
+    "reminder-list",
+    "reminder-get",
+    "reminder-acknowledge",
+    "reminder-cancel",
+    "reminder-reschedule",
+    "reminder-rebuild",
+    "reminder-due",
     "state-list",
     "state-append",
     "paths",
@@ -344,6 +363,7 @@ def main() -> int:
     flow_parser.add_argument("--review-dir", default="review", help="Review directory")
     flow_parser.add_argument("--state-dir", default="state", help="State snapshots directory")
     flow_parser.add_argument("--tasks-dir", default="tasks", help="Formal tasks authority directory")
+    flow_parser.add_argument("--reminders-dir", default="reminders", help="Reminder authority directory")
     flow_parser.add_argument("--runtime-flow-dir", default="runtime/flow", help="Flow runtime output directory")
 
     context_parser = subparsers.add_parser("export-agent-context", help="Export bounded Moonlolo Agent Context Pack")
@@ -439,6 +459,90 @@ def main() -> int:
     task_rebuild.add_argument("--runtime-path", default="runtime/tasks/current.json")
     task_rebuild.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
 
+    reminder_create = subparsers.add_parser("reminder-create", help="Append a one-shot Reminder creation record")
+    reminder_create.add_argument("--title", required=True)
+    reminder_create.add_argument("--description", default=None)
+    reminder_create.add_argument("--remind-at", required=True)
+    reminder_create.add_argument("--task-id", default=None)
+    reminder_create.add_argument("--source", default="manual")
+    reminder_create.add_argument("--created-by", default="human")
+    reminder_create.add_argument("--request-id", default=None)
+    reminder_create.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_create.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_create.add_argument("--current-path", default="runtime/reminders/current.json")
+    reminder_create.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_create.add_argument("--task-items-path", default="tasks/items.jsonl")
+    reminder_create.add_argument("--task-actions-path", default="tasks/actions.jsonl")
+    reminder_create.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    reminder_list = subparsers.add_parser("reminder-list", help="List reminders from the rebuilt current view")
+    reminder_list.add_argument("--status", choices=sorted(REMINDER_STATUSES), default=None)
+    reminder_list.add_argument("--task-id", default=None)
+    reminder_list.add_argument("--limit", type=int, default=None)
+    reminder_list.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_list.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_list.add_argument("--current-path", default="runtime/reminders/current.json")
+    reminder_list.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_list.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    reminder_get = subparsers.add_parser("reminder-get", help="Get one reminder from the rebuilt current view")
+    reminder_get.add_argument("--id", required=True, dest="reminder_id")
+    reminder_get.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_get.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_get.add_argument("--current-path", default="runtime/reminders/current.json")
+    reminder_get.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_get.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    reminder_ack = subparsers.add_parser("reminder-acknowledge", help="Append a Reminder acknowledged action")
+    reminder_ack.add_argument("--id", required=True, dest="reminder_id")
+    reminder_ack.add_argument("--reason", required=True)
+    reminder_ack.add_argument("--created-by", default="human")
+    reminder_ack.add_argument("--request-id", default=None)
+    reminder_ack.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_ack.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_ack.add_argument("--current-path", default="runtime/reminders/current.json")
+    reminder_ack.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_ack.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    reminder_cancel = subparsers.add_parser("reminder-cancel", help="Append a Reminder cancelled action")
+    reminder_cancel.add_argument("--id", required=True, dest="reminder_id")
+    reminder_cancel.add_argument("--reason", required=True)
+    reminder_cancel.add_argument("--created-by", default="human")
+    reminder_cancel.add_argument("--request-id", default=None)
+    reminder_cancel.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_cancel.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_cancel.add_argument("--current-path", default="runtime/reminders/current.json")
+    reminder_cancel.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_cancel.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    reminder_reschedule = subparsers.add_parser("reminder-reschedule", help="Append a Reminder rescheduled action")
+    reminder_reschedule.add_argument("--id", required=True, dest="reminder_id")
+    reminder_reschedule.add_argument("--remind-at", required=True)
+    reminder_reschedule.add_argument("--reason", required=True)
+    reminder_reschedule.add_argument("--created-by", default="human")
+    reminder_reschedule.add_argument("--request-id", default=None)
+    reminder_reschedule.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_reschedule.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_reschedule.add_argument("--current-path", default="runtime/reminders/current.json")
+    reminder_reschedule.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_reschedule.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    reminder_rebuild = subparsers.add_parser("reminder-rebuild", help="Rebuild Reminder runtime views")
+    reminder_rebuild.add_argument("--now", default=None)
+    reminder_rebuild.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_rebuild.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_rebuild.add_argument("--current-path", default="runtime/reminders/current.json")
+    reminder_rebuild.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_rebuild.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    reminder_due = subparsers.add_parser("reminder-due", help="List due reminders without mutating authority")
+    reminder_due.add_argument("--now", default=None)
+    reminder_due.add_argument("--limit", type=int, default=100)
+    reminder_due.add_argument("--items-path", default="reminders/items.jsonl")
+    reminder_due.add_argument("--actions-path", default="reminders/actions.jsonl")
+    reminder_due.add_argument("--due-path", default="runtime/reminders/due.json")
+    reminder_due.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
     state_list_parser = subparsers.add_parser("state-list", help="List append-only Current State snapshots")
     state_list_parser.add_argument("--limit", type=int, default=None)
     state_list_parser.add_argument("--energy", default=None)
@@ -516,6 +620,7 @@ def main() -> int:
             resolve_data_path(args.state_dir),
             resolve_data_path(args.runtime_flow_dir),
             resolve_data_path(args.tasks_dir),
+            resolve_data_path(args.reminders_dir),
         )
 
     if args.command == "export-agent-context":
@@ -720,6 +825,114 @@ def main() -> int:
         else:
             task = payload.get("task") or {}
             print(f"{payload.get('status')}: {task.get('id')}")
+        return 0
+
+    if args.command in {
+        "reminder-create",
+        "reminder-list",
+        "reminder-get",
+        "reminder-acknowledge",
+        "reminder-cancel",
+        "reminder-reschedule",
+        "reminder-rebuild",
+        "reminder-due",
+    }:
+        items_path = resolve_data_path(args.items_path)
+        actions_path = resolve_data_path(args.actions_path)
+        due_path = resolve_data_path(args.due_path)
+        current_path = resolve_data_path(args.current_path) if hasattr(args, "current_path") else resolve_data_path("runtime/reminders/current.json")
+        try:
+            if args.command == "reminder-create":
+                payload = run_reminder_create(
+                    items_path,
+                    actions_path,
+                    current_path,
+                    due_path,
+                    resolve_data_path(args.task_items_path),
+                    resolve_data_path(args.task_actions_path),
+                    args.title,
+                    args.description,
+                    normalize_remind_at(args.remind_at),
+                    args.task_id,
+                    args.source,
+                    args.created_by,
+                    args.request_id,
+                )
+            elif args.command == "reminder-list":
+                payload = run_reminder_list(
+                    items_path,
+                    actions_path,
+                    current_path,
+                    due_path,
+                    args.status,
+                    args.task_id,
+                    args.limit,
+                )
+            elif args.command == "reminder-get":
+                payload = run_reminder_get(items_path, actions_path, current_path, due_path, args.reminder_id)
+            elif args.command == "reminder-acknowledge":
+                payload = run_reminder_action(
+                    items_path,
+                    actions_path,
+                    current_path,
+                    due_path,
+                    args.reminder_id,
+                    "acknowledged",
+                    args.reason,
+                    args.created_by,
+                    args.request_id,
+                )
+            elif args.command == "reminder-cancel":
+                payload = run_reminder_action(
+                    items_path,
+                    actions_path,
+                    current_path,
+                    due_path,
+                    args.reminder_id,
+                    "cancelled",
+                    args.reason,
+                    args.created_by,
+                    args.request_id,
+                )
+            elif args.command == "reminder-reschedule":
+                payload = run_reminder_action(
+                    items_path,
+                    actions_path,
+                    current_path,
+                    due_path,
+                    args.reminder_id,
+                    "rescheduled",
+                    args.reason,
+                    args.created_by,
+                    args.request_id,
+                    normalize_remind_at(args.remind_at),
+                )
+            elif args.command == "reminder-rebuild":
+                current = rebuild_reminder_current_view(items_path, actions_path, current_path)
+                due = rebuild_reminder_due_view(items_path, actions_path, due_path, normalize_remind_at(args.now) if args.now else None)
+                payload = {"ok": True, "status": "rebuilt", **current, "due": due}
+            else:
+                payload = rebuild_reminder_due_view(items_path, actions_path, due_path, normalize_remind_at(args.now) if args.now else None, args.limit)
+        except ReminderFlowError as exc:
+            if args.json_output:
+                _print_json(_json_error(exc.code, exc.message))
+                return 1
+            print(f"ERROR [{exc.code}]: {exc.message}")
+            return 1
+
+        if args.json_output:
+            _print_json(payload)
+        elif args.command in {"reminder-list", "reminder-rebuild"}:
+            print(f"count: {payload.get('count', len(payload.get('reminders', [])))}")
+            for item in payload.get("reminders", []):
+                print(f"{item['id']} | {item['status']} | {item['remind_at']} | {item['title']}")
+        elif args.command == "reminder-due":
+            print(f"due: {len(payload.get('due', []))}")
+            for item in payload.get("due", []):
+                print(f"{item['id']} | {item['remind_at']} | {item['title']}")
+        else:
+            reminder = payload.get("reminder") or {}
+            print(f"{payload.get('status', 'ok')}: {reminder.get('id')}")
         return 0
 
     if args.command == "state-list":

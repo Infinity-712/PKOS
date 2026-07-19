@@ -237,6 +237,11 @@ assert(source.includes("runtimeInfo"), "desktop runtime identity state missing")
 assert(source.includes("Runtime:"), "desktop runtime identity display missing");
 assert(source.includes("Runtime identity unavailable"), "desktop runtime identity unavailable fallback missing");
 assert(source.includes("runtime-mismatch"), "desktop runtime mismatch warning missing");
+assert(source.includes("getRuntimeReminderNotifications"), "desktop reminder notification lookup missing");
+assert(source.includes("Due Reminders"), "desktop due reminder panel missing");
+assert(source.includes("Runtime notification view only"), "desktop reminder runtime-only boundary missing");
+assert(!source.includes("new Notification"), "desktop must not use native OS notifications in MVP");
+console.log("REMINDER_DESKTOP_NOTIFICATION_SMOKE_OK");
 assert(source.includes("getProviderStatus"), "desktop provider status lookup missing");
 assert(source.includes("getProviderProfiles"), "desktop provider profiles lookup missing");
 assert(source.includes("setProviderSelection"), "desktop provider selection mutation missing");

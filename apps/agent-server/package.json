@@ -21,7 +21,9 @@
     "provider-profile-smoke": "tsx src/scripts/providerProfileSmoke.ts",
     "chat-history-smoke": "tsx src/scripts/chatHistorySmoke.ts",
     "runtime-identity-smoke": "tsx src/scripts/runtimeIdentitySmoke.ts",
-    "task-api-smoke": "tsx src/scripts/taskApiSmoke.ts"
+    "task-api-smoke": "tsx src/scripts/taskApiSmoke.ts",
+    "reminder-api-smoke": "tsx src/scripts/reminderApiSmoke.ts",
+    "reminder-scheduler-smoke": "tsx src/scripts/reminderSchedulerSmoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -11,6 +11,7 @@ import type {
   CreateChatSessionResponse,
   HealthResponse,
   RuntimeInfoResponse,
+  RuntimeReminderNotificationsResponse,
   JsonObject,
   ProviderProfilesResponse,
   ProviderStatusResponse,
@@ -204,6 +205,18 @@ export function isStateTimelineResponse(value: unknown): value is StateTimelineR
   );
 }
 
+export function isRuntimeReminderNotificationsResponse(value: unknown): value is RuntimeReminderNotificationsResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.generatedAt === "string" &&
+    typeof value.evaluatedAt === "string" &&
+    typeof value.count === "number" &&
+    Array.isArray(value.notifications) &&
+    value.notifications.every(isRuntimeReminderNotification)
+  );
+}
+
 export function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
   return isRecord(value) && typeof value.code === "string" && typeof value.message === "string";
 }
@@ -301,6 +314,23 @@ function isStateTimelineItem(value: unknown): boolean {
     (value.note === null || typeof value.note === "string") &&
     typeof value.createdAt === "string" &&
     typeof value.stale === "boolean"
+  );
+}
+
+function isRuntimeReminderNotification(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.reminderId === "string" &&
+    typeof value.remindAt === "string" &&
+    typeof value.runtimeFingerprint === "string" &&
+    typeof value.deliveryChannel === "string" &&
+    typeof value.deliveryState === "string" &&
+    typeof value.firstSeenAt === "string" &&
+    typeof value.lastAttemptAt === "string" &&
+    typeof value.attemptCount === "number" &&
+    (typeof value.acknowledgedInRuntimeAt === "string" || value.acknowledgedInRuntimeAt === null) &&
+    (typeof value.errorCode === "string" || value.errorCode === null)
   );
 }
 

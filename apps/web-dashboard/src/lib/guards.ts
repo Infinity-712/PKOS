@@ -13,6 +13,8 @@ import type {
   AuditEventView,
   AuditEventsResponse,
   InboxReviewListResponse,
+  ReminderItem,
+  ReminderListResponse,
   TaskItem,
   TaskListResponse,
   WritebackResult,
@@ -66,6 +68,19 @@ export function isTaskListResponse(value: unknown): value is TaskListResponse {
     value.ok === true &&
     Array.isArray(value.items) &&
     value.items.every(isTaskItem) &&
+    typeof value.count === "number" &&
+    typeof value.generatedAt === "string" &&
+    isRecord(value.filters) &&
+    isRecord(value.source)
+  );
+}
+
+export function isReminderListResponse(value: unknown): value is ReminderListResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    Array.isArray(value.items) &&
+    value.items.every(isReminderItem) &&
     typeof value.count === "number" &&
     typeof value.generatedAt === "string" &&
     isRecord(value.filters) &&
@@ -155,6 +170,24 @@ function isTaskItem(value: unknown): value is TaskItem {
     (typeof value.latestReason === "string" || value.latestReason === null) &&
     typeof value.notesCount === "number" &&
     (typeof value.latestNoteAt === "string" || value.latestNoteAt === null)
+  );
+}
+
+function isReminderItem(value: unknown): value is ReminderItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    (typeof value.description === "string" || value.description === null) &&
+    typeof value.remindAt === "string" &&
+    (typeof value.taskId === "string" || value.taskId === null) &&
+    typeof value.source === "string" &&
+    typeof value.status === "string" &&
+    typeof value.createdAt === "string" &&
+    typeof value.createdBy === "string" &&
+    (typeof value.latestActionId === "string" || value.latestActionId === null) &&
+    (typeof value.latestActionAt === "string" || value.latestActionAt === null) &&
+    (typeof value.latestReason === "string" || value.latestReason === null)
   );
 }
 

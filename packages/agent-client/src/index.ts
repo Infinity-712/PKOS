@@ -38,6 +38,7 @@ export {
   isProviderProfilesResponse,
   isRecord,
   isRuntimeInfoResponse,
+  isRuntimeReminderNotificationsResponse,
   isStateTimelineResponse,
 } from "./guards.js";
 export type {
@@ -70,6 +71,9 @@ export type {
   ProviderProfileSummary,
   ReasoningPreset,
   RuntimeInfoResponse,
+  RuntimeReminderNotification,
+  RuntimeReminderNotificationFilters,
+  RuntimeReminderNotificationsResponse,
   SetProviderSelectionInput,
   SendChatMessageInput,
   StateAppendRequest,

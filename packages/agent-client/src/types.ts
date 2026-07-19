@@ -246,6 +246,33 @@ export type StateTimelineResponse = {
   filters: JsonObject;
 };
 
+export type RuntimeReminderNotification = {
+  id: string;
+  reminderId: string;
+  remindAt: string;
+  runtimeFingerprint: string;
+  deliveryChannel: string;
+  deliveryState: string;
+  firstSeenAt: string;
+  lastAttemptAt: string;
+  attemptCount: number;
+  acknowledgedInRuntimeAt: string | null;
+  errorCode: string | null;
+};
+
+export type RuntimeReminderNotificationsResponse = {
+  ok: boolean;
+  generatedAt: string;
+  evaluatedAt: string;
+  count: number;
+  notifications: RuntimeReminderNotification[];
+};
+
+export type RuntimeReminderNotificationFilters = {
+  now?: string;
+  limit?: number;
+};
+
 export type InboxAppendRequest = JsonObject & {
   requestId: string;
   captureType: string;

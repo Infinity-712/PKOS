@@ -5,10 +5,11 @@ import { AuditPage } from "./pages/AuditPage.js";
 import { CapturePage } from "./pages/CapturePage.js";
 import { InboxReviewPage } from "./pages/InboxReviewPage.js";
 import { OverviewPage } from "./pages/OverviewPage.js";
+import { RemindersPage } from "./pages/RemindersPage.js";
 import { StatePage } from "./pages/StatePage.js";
 import { TasksPage } from "./pages/TasksPage.js";
 
-type TabId = "overview" | "capture" | "state" | "inboxReview" | "tasks" | "actions" | "audit";
+type TabId = "overview" | "capture" | "state" | "inboxReview" | "tasks" | "reminders" | "actions" | "audit";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Overview" },
@@ -16,6 +17,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
   { id: "state", label: "State" },
   { id: "inboxReview", label: "Inbox Review" },
   { id: "tasks", label: "Tasks" },
+  { id: "reminders", label: "Reminders" },
   { id: "actions", label: "Action Requests" },
   { id: "audit", label: "Audit" },
 ];
@@ -46,6 +48,7 @@ export function App() {
       {tab === "state" ? <StatePage /> : null}
       {tab === "inboxReview" ? <InboxReviewPage /> : null}
       {tab === "tasks" ? <TasksPage /> : null}
+      {tab === "reminders" ? <RemindersPage /> : null}
       {tab === "actions" ? <ActionRequestsPage /> : null}
       {tab === "audit" ? <AuditPage /> : null}
     </main>

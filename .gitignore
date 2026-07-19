@@ -2,6 +2,7 @@
 /runtime/agent_context.json
 /runtime/flow/*.json
 /runtime/inbox_review/*.json
+/runtime/reminders/*.json
 !/runtime/.gitkeep
 !/runtime/flow/.gitkeep
 

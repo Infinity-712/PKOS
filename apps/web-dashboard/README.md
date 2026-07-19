@@ -5,7 +5,7 @@
 The dashboard is a private local UI for Agent Runtime operations and recovery. It talks to the Agent Server by same-origin `/api` and `/health` requests during development through the Vite proxy.
 
 It does not implement real LLM calls, Agent tool selection, RAG, memory,
-reminder scheduling, object management, trusted migration, object conversion,
+recurring reminder scheduling, object management, trusted migration, object conversion,
 OpenClaw, WeChat, Electron, mobile, or production static hosting.
 
 Common browser-safe API types, guards, fetch helpers, NDJSON parsing, and request attempt state now live in `packages/agent-client`. Web-only management surfaces such as Inbox Review, Action Requests, and Audit keep their local model code and behavior boundaries unchanged.
@@ -52,6 +52,7 @@ http://127.0.0.1:5173
 - State: Current State card, explicit new state snapshot form, and append-only state timeline.
 - Inbox Review: local human review for `archive` and `restore` through fixed API endpoints.
 - Tasks: local human management for formal task create/list/detail/status transitions through fixed API endpoints.
+- Reminders: local human management for one-shot reminder create/list/detail/acknowledge/cancel/reschedule through fixed API endpoints.
 - Action Requests: idempotency/recovery list, detail view, and human resolution for indeterminate requests.
 - Audit: read-only `agent_events` view through sanitized payload summaries.
 
@@ -154,6 +155,35 @@ Example:
 Displayed/input: 2026-07-15 18:00
 API/authority: 2026-07-15T10:00:00.000Z
 ```
+
+## Reminders Contract
+
+The Reminders page manages explicit one-shot reminders. Reminder authority
+remains under `PKOS_DATA_ROOT`:
+
+- `reminders/items.jsonl`
+- `reminders/actions.jsonl`
+- `runtime/reminders/current.json` and `runtime/reminders/due.json` as rebuildable derived views
+
+The page uses fixed endpoints:
+
+- `GET /api/pkos/reminders`
+- `GET /api/pkos/reminders/:reminderId`
+- `POST /api/pkos/reminders`
+- `POST /api/pkos/reminders/:reminderId/acknowledge`
+- `POST /api/pkos/reminders/:reminderId/cancel`
+- `POST /api/pkos/reminders/:reminderId/reschedule`
+
+The first submit freezes one `requestId` and payload in memory; retry reuses the
+same request. Clicking Create Reminder, Apply Reminder Action, or Reschedule
+Reminder is the explicit human confirmation and the request body includes
+`confirmed: true`.
+
+The page does not create recurring reminders, infer reminders from task dueAt,
+auto-acknowledge, auto-cancel, auto-reschedule, or write reminder JSONL files
+directly. Full reminder titles/descriptions/reasons may be shown in localhost UI
+for the human operator, but they are not placed in URL query parameters,
+`localStorage`, generic SQLite audit payloads, or Agent event payloads.
 
 ## Verification
 
