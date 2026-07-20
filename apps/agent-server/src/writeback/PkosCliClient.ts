@@ -4,6 +4,7 @@ import { resolveAgentPaths, type AgentPaths } from "../config/paths.js";
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput, InboxReviewStatus } from "../tools/builtin/inboxReview.js";
 import type { ReminderActionInput, ReminderCreateInput, ReminderRescheduleInput } from "../tools/builtin/reminderFlow.js";
+import type { ReviewBatchRatingInput, ReviewCorrectionInput, ReviewRatingInput } from "../tools/builtin/reviewFlow.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
 import type { TaskCreateInput, TaskTransitionInput } from "../tools/builtin/taskFlow.js";
 import { CliProcessRunner, type CliProcessRunResult } from "./CliProcessRunner.js";
@@ -137,6 +138,10 @@ export type ReminderDueCliItem = {
 
 export type ReminderDueCliResult =
   | { ok: true; generatedAt: string; evaluatedAt: string; count: number; due: ReminderDueCliItem[]; source: Record<string, unknown> }
+  | { ok: false; errorCode: string; message: string };
+
+export type ReviewCliResult =
+  | { ok: true; payload: Record<string, unknown> }
   | { ok: false; errorCode: string; message: string };
 
 const MAX_OUTPUT_BYTES = 64 * 1024;
@@ -350,6 +355,93 @@ export class PkosCliClient {
       input.requestId,
       "--json",
     ]);
+  }
+
+  async reviewRate(input: ReviewRatingInput): Promise<WritebackResult> {
+    return this.runReviewWriteCommand("pkos.review.rating", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "review-rate",
+      "--object-id",
+      input.objectId,
+      "--rating",
+      String(input.rating),
+      "--reviewed-at",
+      input.reviewedAt,
+      "--actor",
+      input.actor,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ]);
+  }
+
+  async reviewRateBatch(input: ReviewBatchRatingInput): Promise<WritebackResult> {
+    return this.runReviewWriteCommand("pkos.review.rating_batch", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "review-rate-batch",
+      "--items-json",
+      JSON.stringify(input.items),
+      "--reviewed-at",
+      input.reviewedAt,
+      "--actor",
+      input.actor,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ]);
+  }
+
+  async reviewCorrect(input: ReviewCorrectionInput): Promise<WritebackResult> {
+    const args = [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "review-correct",
+      "--target-event-id",
+      input.targetEventId,
+      "--reason",
+      input.reason,
+      "--actor",
+      input.actor,
+      "--request-id",
+      input.requestId,
+      "--json",
+    ];
+    if (input.correctedRating !== null) {
+      args.push("--corrected-rating", String(input.correctedRating));
+    }
+    return this.runReviewWriteCommand("pkos.review.correction", args);
+  }
+
+  async reviewQueue(filters: { now?: string; limit?: number }): Promise<ReviewCliResult> {
+    const args = ["-B", "-m", "tools.pkos", "review-queue", "--json"];
+    if (filters.now) {
+      args.push("--now", filters.now);
+    }
+    if (filters.limit !== undefined) {
+      args.push("--limit", String(filters.limit));
+    }
+    return this.runReviewReadCommand(args, "PKOS CLI rejected review queue");
+  }
+
+  async reviewStatus(filters: { now?: string }): Promise<ReviewCliResult> {
+    const args = ["-B", "-m", "tools.pkos", "review-status", "--json"];
+    if (filters.now) {
+      args.push("--now", filters.now);
+    }
+    return this.runReviewReadCommand(args, "PKOS CLI rejected review status");
+  }
+
+  async reviewGet(objectId: string): Promise<ReviewCliResult> {
+    return this.runReviewReadCommand(["-B", "-m", "tools.pkos", "review-get", "--object-id", objectId, "--json"], "PKOS CLI rejected review get");
+  }
+
+  async reviewHistory(objectId: string): Promise<ReviewCliResult> {
+    return this.runReviewReadCommand(["-B", "-m", "tools.pkos", "review-history", "--object-id", objectId, "--json"], "PKOS CLI rejected review history");
   }
 
   async inboxReviewList(filters: InboxReviewListFilters): Promise<InboxReviewCliListResult> {
@@ -637,6 +729,46 @@ export class PkosCliClient {
       target: operation === "pkos.task.create" ? "tasks/items.jsonl" : "tasks/actions.jsonl",
       message: `PKOS task write ${stringValue(payload.status) || "completed"}`,
     });
+  }
+
+  private async runReviewWriteCommand(operation: string, args: string[]): Promise<WritebackResult> {
+    const result = await this.runRawCommand(args);
+    if (result.error) {
+      return result.errorResult(operation);
+    }
+    const payload = parseCliJson(operation, result.result);
+    if (payload?.ok === false) {
+      return errorResult({ operation, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, "PKOS CLI rejected review write") });
+    }
+    if (!payload || payload.ok !== true) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI returned invalid review JSON" });
+    }
+    if (payload.status === "failed") {
+      return errorResult({ operation, errorCode: "no_successful_review_items", message: "PKOS review write had no successful items" });
+    }
+    const event = isRecord(payload.event) ? payload.event : {};
+    const recordId = stringValue(event.id) || stringValue(payload.batchRequestId) || undefined;
+    return writtenResult({
+      operation,
+      recordId,
+      target: "review/logs",
+      message: `PKOS review write ${stringValue(payload.status) || "completed"}`,
+    });
+  }
+
+  private async runReviewReadCommand(args: string[], fallbackMessage: string): Promise<ReviewCliResult> {
+    const result = await this.runRawCommand(args);
+    if (result.error) {
+      return result.error;
+    }
+    const payload = parseCliJson("pkos.review.read", result.result);
+    if (!payload) {
+      return { ok: false, errorCode: "cli_failed", message: "PKOS CLI returned invalid JSON" };
+    }
+    if (payload.ok === false) {
+      return { ok: false, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, fallbackMessage) };
+    }
+    return { ok: true, payload };
   }
 
   private async runReminderWriteCommand(operation: string, args: string[]): Promise<WritebackResult> {

@@ -15,6 +15,10 @@ import type {
   InboxReviewListResponse,
   ReminderItem,
   ReminderListResponse,
+  ReviewHistoryResponse,
+  ReviewItemResponse,
+  ReviewQueueItem,
+  ReviewQueueResponse,
   TaskItem,
   TaskListResponse,
   WritebackResult,
@@ -85,6 +89,43 @@ export function isReminderListResponse(value: unknown): value is ReminderListRes
     typeof value.generatedAt === "string" &&
     isRecord(value.filters) &&
     isRecord(value.source)
+  );
+}
+
+export function isReviewQueueResponse(value: unknown): value is ReviewQueueResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.generatedAt === "string" &&
+    typeof value.evaluatedAt === "string" &&
+    Array.isArray(value.due) &&
+    value.due.every(isReviewQueueItem) &&
+    Array.isArray(value.upcoming) &&
+    value.upcoming.every(isReviewQueueItem) &&
+    isRecord(value.counts) &&
+    typeof value.counts.due === "number" &&
+    typeof value.counts.overdue === "number" &&
+    typeof value.counts.upcoming === "number" &&
+    typeof value.counts.legacyWarning === "number" &&
+    typeof value.counts.contentChanged === "number" &&
+    typeof value.counts.orphaned === "number" &&
+    isRecord(value.source)
+  );
+}
+
+export function isReviewItemResponse(value: unknown): value is ReviewItemResponse {
+  return isRecord(value) && value.ok === true && isReviewQueueItem(value.item);
+}
+
+export function isReviewHistoryResponse(value: unknown): value is ReviewHistoryResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.objectId === "string" &&
+    typeof value.objectExists === "boolean" &&
+    Array.isArray(value.events) &&
+    value.events.every(isRecord) &&
+    typeof value.count === "number"
   );
 }
 
@@ -188,6 +229,24 @@ function isReminderItem(value: unknown): value is ReminderItem {
     (typeof value.latestActionId === "string" || value.latestActionId === null) &&
     (typeof value.latestActionAt === "string" || value.latestActionAt === null) &&
     (typeof value.latestReason === "string" || value.latestReason === null)
+  );
+}
+
+function isReviewQueueItem(value: unknown): value is ReviewQueueItem {
+  return (
+    isRecord(value) &&
+    typeof value.objectId === "string" &&
+    typeof value.objectType === "string" &&
+    typeof value.title === "string" &&
+    typeof value.status === "string" &&
+    typeof value.dueAt === "string" &&
+    typeof value.lastReviewedAt === "string" &&
+    typeof value.repetitions === "number" &&
+    typeof value.intervalDays === "number" &&
+    typeof value.easeFactor === "number" &&
+    typeof value.contentChangedSinceLastReview === "boolean" &&
+    (typeof value.legacyWarning === "string" || value.legacyWarning === null) &&
+    typeof value.overdueDays === "number"
   );
 }
 

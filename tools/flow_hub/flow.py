@@ -324,6 +324,60 @@ def _flow_model_from_file_or_build(
     return fallback[name]
 
 
+def _bounded_review_srs_summary(review_dir: Path, review_queue_model: dict[str, Any], generated_at: str) -> dict[str, Any]:
+    review_runtime_queue = read_json(review_dir.parent / "runtime" / "review" / "queue.json")
+    if isinstance(review_runtime_queue, dict) and isinstance(review_runtime_queue.get("counts"), dict):
+        due_items = review_runtime_queue.get("due") if isinstance(review_runtime_queue.get("due"), list) else []
+        upcoming_items = review_runtime_queue.get("upcoming") if isinstance(review_runtime_queue.get("upcoming"), list) else []
+        next_due_at = None
+        for item in [*due_items, *upcoming_items]:
+            if isinstance(item, dict) and isinstance(item.get("dueAt"), str):
+                next_due_at = item["dueAt"]
+                break
+        return {
+            "schema_version": "0.8-alpha",
+            "generated_at": review_runtime_queue.get("generatedAt") or generated_at,
+            "evaluated_at": review_runtime_queue.get("evaluatedAt"),
+            "counts": {
+                "due": int(review_runtime_queue["counts"].get("due", 0)),
+                "overdue": int(review_runtime_queue["counts"].get("overdue", 0)),
+                "upcoming": int(review_runtime_queue["counts"].get("upcoming", 0)),
+                "legacy_warning": int(review_runtime_queue["counts"].get("legacyWarning", 0)),
+                "content_changed": int(review_runtime_queue["counts"].get("contentChanged", 0)),
+                "orphaned": int(review_runtime_queue["counts"].get("orphaned", 0)),
+            },
+            "next_due_at": next_due_at,
+            "source": review_runtime_queue.get("source", {}),
+            "content_included": False,
+            "titles_included": False,
+            "history_included": False,
+        }
+
+    legacy_items = list(review_queue_model.get("items", []))
+    legacy_items.sort(key=lambda item: str(item.get("due_at") or ""))
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": generated_at,
+        "evaluated_at": generated_at,
+        "counts": {
+            "due": len(legacy_items),
+            "overdue": 0,
+            "upcoming": 0,
+            "legacy_warning": 0,
+            "content_changed": 0,
+            "orphaned": 0,
+        },
+        "next_due_at": str(legacy_items[0].get("due_at") or "") if legacy_items else None,
+        "source": {
+            "authority": "legacy review markdown queue",
+            "items_count": len(legacy_items),
+        },
+        "content_included": False,
+        "titles_included": False,
+        "history_included": False,
+    }
+
+
 def build_agent_context(
     objects_dir: Path,
     review_dir: Path,
@@ -347,6 +401,7 @@ def build_agent_context(
     task_summary_model = _flow_model_from_file_or_build("task_summary", runtime_flow_dir, fallback)
     reminder_summary_model = _flow_model_from_file_or_build("reminder_summary", runtime_flow_dir, fallback)
     flow_budget_model = _flow_model_from_file_or_build("flow_budget", runtime_flow_dir, fallback)
+    review_summary = _bounded_review_srs_summary(review_dir, review_queue_model, ts)
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -361,7 +416,8 @@ def build_agent_context(
             "rules": flow_budget_model.get("rules", {}),
         },
         "today_queue": list(today_queue_model.get("items", [])),
-        "review_queue": list(review_queue_model.get("items", []))[: int(context_budget["max_review_items"])],
+        "review_queue": [],
+        "review_summary": review_summary,
         "recovery_queue": list(recovery_queue_model.get("items", [])),
         "task_summary": {
             "counts": task_summary_model.get("counts", {}),

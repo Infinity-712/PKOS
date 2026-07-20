@@ -6,15 +6,17 @@ import { CapturePage } from "./pages/CapturePage.js";
 import { InboxReviewPage } from "./pages/InboxReviewPage.js";
 import { OverviewPage } from "./pages/OverviewPage.js";
 import { RemindersPage } from "./pages/RemindersPage.js";
+import { ReviewPage } from "./pages/ReviewPage.js";
 import { StatePage } from "./pages/StatePage.js";
 import { TasksPage } from "./pages/TasksPage.js";
 
-type TabId = "overview" | "capture" | "state" | "inboxReview" | "tasks" | "reminders" | "actions" | "audit";
+type TabId = "overview" | "capture" | "state" | "review" | "inboxReview" | "tasks" | "reminders" | "actions" | "audit";
 
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "overview", label: "Overview" },
   { id: "capture", label: "Capture" },
   { id: "state", label: "State" },
+  { id: "review", label: "Review" },
   { id: "inboxReview", label: "Inbox Review" },
   { id: "tasks", label: "Tasks" },
   { id: "reminders", label: "Reminders" },
@@ -46,6 +48,7 @@ export function App() {
       {tab === "overview" ? <OverviewPage /> : null}
       {tab === "capture" ? <CapturePage /> : null}
       {tab === "state" ? <StatePage /> : null}
+      {tab === "review" ? <ReviewPage /> : null}
       {tab === "inboxReview" ? <InboxReviewPage /> : null}
       {tab === "tasks" ? <TasksPage /> : null}
       {tab === "reminders" ? <RemindersPage /> : null}

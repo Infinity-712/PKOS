@@ -60,6 +60,8 @@ Short-horizon action queue for current operation. It is not a full long-term tod
 ### Review Queue
 
 SRS-derived queue for fact / skill / claim review.
+v0.8-alpha Review/SRS authority is `review/logs/YYYY-MM-DD.jsonl`; runtime
+review queue files under `runtime/review/` are derived and rebuildable.
 
 ### Recovery Queue
 
@@ -258,6 +260,11 @@ It must not contain the whole repository. It should include only:
 - latest_digest metadata or bounded excerpt
 - operational_skills, currently empty if not implemented
 - retrieved_objects, currently empty because RAG is not implemented
+
+For Review/SRS, ordinary Agent Context must include only a bounded
+`review_summary`: due/upcoming/overdue counts, next due time, warning counts,
+and source hashes. It must not include object titles, object body, rating
+history, or correction reasons.
 - task_summary with bounded counts/source hashes only
 - reminder_summary with bounded counts/source hashes only
 

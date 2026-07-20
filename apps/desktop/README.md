@@ -55,6 +55,7 @@ blocking chat.
 - Quick Capture: explicit Inbox and State append actions with frozen `requestId` retry semantics.
 - Status: backend connectivity plus Current State summary from `GET /api/pkos/state-timeline?limit=1`.
 - Due Reminders: read-only runtime notification panel from `GET /api/runtime/reminder-notifications`; it does not write Reminder authority or create native OS notifications.
+- Review status may be surfaced only as bounded counts or a link to Web Dashboard; Desktop does not implement Review authority mutation in this MVP.
 - Runtime identity: profile name, data label, short runtime fingerprint, service build, API contract, and schema compatibility from `GET /api/runtime-info`.
 - Open Web Dashboard: fixed allowlisted URL `http://127.0.0.1:5173`.
 
@@ -184,7 +185,7 @@ DESKTOP_WINDOW_PROBE_OK
 
 ## Non-goals
 
-This MVP does not include installer packaging, Agent tool selection, Reminder authority mutation, recurring Reminder Scheduler, Agent Memory, RAG, MCP, tray, native OS notifications, auto-start, auto-update, mobile, OpenClaw, WeChat, Inbox Review UI, Action Resolution UI, Audit UI, Objects, Trusted management, API key settings, provider URL settings, arbitrary model ID input, or request parameter editors.
+This MVP does not include installer packaging, Agent tool selection, Review UI, Reminder authority mutation, recurring Reminder Scheduler, Agent Memory, RAG, MCP, tray, native OS notifications, auto-start, auto-update, mobile, OpenClaw, WeChat, Inbox Review UI, Action Resolution UI, Audit UI, Objects, Trusted management, API key settings, provider URL settings, arbitrary model ID input, or request parameter editors.
 
 ## Commands
 

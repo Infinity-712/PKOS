@@ -24,7 +24,8 @@
     "service-identity-smoke": "tsx src/scripts/serviceIdentitySmoke.ts",
     "task-api-smoke": "tsx src/scripts/taskApiSmoke.ts",
     "reminder-api-smoke": "tsx src/scripts/reminderApiSmoke.ts",
-    "reminder-scheduler-smoke": "tsx src/scripts/reminderSchedulerSmoke.ts"
+    "reminder-scheduler-smoke": "tsx src/scripts/reminderSchedulerSmoke.ts",
+    "review-api-smoke": "tsx src/scripts/reviewApiSmoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

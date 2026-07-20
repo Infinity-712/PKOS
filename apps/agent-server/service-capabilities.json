@@ -24,6 +24,8 @@
     "task.authority.write",
     "reminder.authority.read",
     "reminder.authority.write",
-    "reminder.runtime-notifications.read"
+    "reminder.runtime-notifications.read",
+    "review-srs.authority.read",
+    "review-srs.authority.write"
   ]
 }

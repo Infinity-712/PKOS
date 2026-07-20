@@ -132,6 +132,27 @@ const ACTIONS: ActionConfig[] = [
     allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "remindAt", "reason", "createdBy"]),
     normalize: normalizeReminderReschedule,
   },
+  {
+    actionName: "pkos.review.rating",
+    toolName: "pkos.review.rating",
+    pathname: "/api/pkos/review/ratings",
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "objectId", "rating", "reviewedAt", "actor"]),
+    normalize: normalizeReviewRating,
+  },
+  {
+    actionName: "pkos.review.rating_batch",
+    toolName: "pkos.review.rating_batch",
+    pathname: "/api/pkos/review/ratings:batch",
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "items", "reviewedAt", "actor"]),
+    normalize: normalizeReviewRatingBatch,
+  },
+  {
+    actionName: "pkos.review.correction",
+    toolName: "pkos.review.correction",
+    pathname: "/api/pkos/review/corrections",
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "targetEventId", "correctedRating", "reason", "actor"]),
+    normalize: normalizeReviewCorrection,
+  },
 ];
 
 export async function handleActionRoutes(req: IncomingMessage, res: ServerResponse, deps: ActionRouteDeps): Promise<boolean> {
@@ -499,6 +520,50 @@ function normalizeReminderReschedule(input: Record<string, unknown>, routeParams
   };
 }
 
+function normalizeReviewRating(input: Record<string, unknown>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      objectId: limitedString(input.objectId, "objectId", { required: true, maxChars: MAX_REFERENCE_CHARS }),
+      rating: normalizeRating(input.rating),
+      reviewedAt: normalizeReviewTimestamp(limitedString(input.reviewedAt, "reviewedAt", { required: true, maxChars: MAX_REFERENCE_CHARS })),
+      actor: limitedString(input.actor, "actor", { required: false, maxChars: MAX_REFERENCE_CHARS }) ?? "human",
+    },
+  };
+}
+
+function normalizeReviewRatingBatch(input: Record<string, unknown>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      items: normalizeRatingItems(input.items),
+      reviewedAt: normalizeReviewTimestamp(limitedString(input.reviewedAt, "reviewedAt", { required: true, maxChars: MAX_REFERENCE_CHARS })),
+      actor: limitedString(input.actor, "actor", { required: false, maxChars: MAX_REFERENCE_CHARS }) ?? "human",
+    },
+  };
+}
+
+function normalizeReviewCorrection(input: Record<string, unknown>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      targetEventId: limitedString(input.targetEventId, "targetEventId", { required: true, maxChars: MAX_REFERENCE_CHARS }),
+      correctedRating: input.correctedRating === undefined || input.correctedRating === null ? null : normalizeRating(input.correctedRating),
+      reason: limitedString(input.reason, "reason", { required: true, maxChars: MAX_REASON_CHARS }),
+      actor: limitedString(input.actor, "actor", { required: false, maxChars: MAX_REFERENCE_CHARS }) ?? "human",
+    },
+  };
+}
+
 function normalizeBase(input: Record<string, unknown>): Omit<ActionRequest, "toolInput"> {
   const requestId = limitedString(input.requestId, "requestId", { required: true, maxChars: MAX_REQUEST_ID_CHARS });
   return {
@@ -506,6 +571,51 @@ function normalizeBase(input: Record<string, unknown>): Omit<ActionRequest, "too
     sessionId: limitedString(input.sessionId, "sessionId", { required: false, maxChars: MAX_REFERENCE_CHARS }),
     sourceMessageId: limitedString(input.sourceMessageId, "sourceMessageId", { required: false, maxChars: MAX_REFERENCE_CHARS }),
   };
+}
+
+function normalizeRating(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+    throw new ActionInputError("invalid_rating", "rating must be an integer from 1 to 5");
+  }
+  return parsed;
+}
+
+function normalizeRatingItems(value: unknown): Array<{ objectId: string; rating: number }> {
+  if (!Array.isArray(value)) {
+    throw new ActionInputError("invalid_input", "items must be an array");
+  }
+  if (value.length < 1 || value.length > 100) {
+    throw new ActionInputError("invalid_input", "items must contain 1 to 100 entries");
+  }
+  return value.map((item, index) => {
+    if (!isPlainRecord(item)) {
+      throw new ActionInputError("invalid_input", `items[${index}] must be an object`);
+    }
+    assertNoForbiddenKeys(item);
+    const allowed = new Set(["objectId", "rating"]);
+    for (const key of Object.keys(item)) {
+      if (!allowed.has(key)) {
+        throw new ActionInputError("invalid_input", `field is not allowed for items[${index}]: ${key}`);
+      }
+    }
+    return {
+      objectId: limitedString(item.objectId, `items[${index}].objectId`, { required: true, maxChars: MAX_REFERENCE_CHARS }),
+      rating: normalizeRating(item.rating),
+    };
+  });
+}
+
+function normalizeReviewTimestamp(value: string): string {
+  const timezoneAwareIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+  if (!timezoneAwareIso.test(value)) {
+    throw new ActionInputError("invalid_reviewed_at", "reviewedAt must be a timezone-aware ISO timestamp");
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new ActionInputError("invalid_reviewed_at", "reviewedAt must be a valid timezone-aware ISO timestamp");
+  }
+  return parsed.toISOString();
 }
 
 function normalizeRisk(value: unknown): Record<string, unknown> {
@@ -632,12 +742,20 @@ function statusForResult(result: WritebackResult): number {
     result.errorCode === "invalid_status" ||
     result.errorCode === "invalid_due_at" ||
     result.errorCode === "invalid_remind_at" ||
+    result.errorCode === "invalid_reviewed_at" ||
+    result.errorCode === "invalid_rating" ||
     result.errorCode === "invalid_priority" ||
     result.errorCode === "invalid_title" ||
     result.errorCode === "invalid_reason" ||
     result.errorCode === "task_not_found" ||
     result.errorCode === "invalid_task_reference" ||
-    result.errorCode === "reminder_not_found"
+    result.errorCode === "reminder_not_found" ||
+    result.errorCode === "object_not_found" ||
+    result.errorCode === "object_not_reviewable" ||
+    result.errorCode === "target_event_not_found" ||
+    result.errorCode === "correction_target_not_latest" ||
+    result.errorCode === "invalid_items_json" ||
+    result.errorCode === "no_successful_review_items"
   ) {
     return 400;
   }

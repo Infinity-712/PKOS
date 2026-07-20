@@ -50,6 +50,7 @@ http://127.0.0.1:5173
 - Overview: health, connected status, service build fingerprint, API contract, database compatibility, enabled capability summary, disabled capability summary.
 - Capture: fixed Action API forms for `inbox-append` and `state-append`.
 - State: Current State card, explicit new state snapshot form, and append-only state timeline.
+- Review: local human SRS review loop with hidden answer, rating, next-due result, history, and correction undo.
 - Inbox Review: local human review for `archive` and `restore` through fixed API endpoints.
 - Tasks: local human management for formal task create/list/detail/status transitions through fixed API endpoints.
 - Reminders: local human management for one-shot reminder create/list/detail/acknowledge/cancel/reschedule through fixed API endpoints.
@@ -103,6 +104,23 @@ Converted items are read-only in this version: `该条目已被标记为 convert
 The page does not provide batch archive, inbox-zero pressure copy, object creation, task creation, content editing, deletion, or generic mark/status controls.
 
 Inbox content is shown for local human review, but the dashboard does not persist capture content or review reasons in `localStorage`.
+
+## Review/SRS Contract
+
+The Review page manages human SRS ratings through fixed endpoints:
+
+- `GET /api/pkos/review/queue`
+- `GET /api/pkos/review/items/:objectId`
+- `GET /api/pkos/review/items/:objectId/history`
+- `POST /api/pkos/review/ratings`
+- `POST /api/pkos/review/corrections`
+
+The queue does not include object body text. The review card starts with the
+answer hidden behind `Show answer`; ratings use bilingual 1..5 labels. Clicking
+Submit Rating or Undo last rating is the human confirmation and sends
+`confirmed: true`. Retry reuses the frozen `requestId` and payload. The page
+does not use `localStorage` as authority and does not add pressure mechanics or
+automatic mastery decisions.
 
 ## Tasks Contract
 
@@ -191,10 +209,12 @@ for the human operator, but they are not placed in URL query parameters,
 npm run check
 npm run build
 npm run smoke
+npm run review-web-smoke
 ```
 
 Expected smoke marker:
 
 ```text
 WEB_DASHBOARD_SMOKE_OK
+REVIEW_WEB_SMOKE_OK
 ```

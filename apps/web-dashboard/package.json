@@ -8,7 +8,8 @@
     "check": "tsc --noEmit",
     "build": "vite build",
     "smoke": "tsc -p tsconfig.smoke.json && node dist-smoke/scripts/smoke.js",
-    "task-due-picker-smoke": "tsc -p tsconfig.task-due-picker-smoke.json && node dist-task-due-picker-smoke/scripts/taskDuePickerSmoke.js"
+    "task-due-picker-smoke": "tsc -p tsconfig.task-due-picker-smoke.json && node dist-task-due-picker-smoke/scripts/taskDuePickerSmoke.js",
+    "review-web-smoke": "tsc -p tsconfig.review-web-smoke.json && node dist-review-web-smoke/scripts/reviewWebSmoke.js"
   },
   "dependencies": {
     "@pkos/agent-client": "file:../../packages/agent-client",

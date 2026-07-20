@@ -52,6 +52,12 @@ Authority remains:
 | `runtime/*.json` | Derived cache, not authority |
 | OpenClaw memory | Interaction runtime memory, not PKOS authority |
 
+Review/SRS v0.8-alpha uses `review/logs/YYYY-MM-DD.jsonl` as the authority for
+human ratings and corrections. `runtime/review/*.json` and `object.srs` are
+projections. Ordinary Agent Context may include only bounded review counts and
+source hashes, never object titles, full content, rating history, or correction
+reason text.
+
 ## 4. Context Pack Overview
 
 v0.5-beta target shape:

@@ -2,6 +2,7 @@
 /runtime/agent_context.json
 /runtime/flow/*.json
 /runtime/inbox_review/*.json
+/runtime/review/*.json
 /runtime/reminders/*.json
 !/runtime/.gitkeep
 !/runtime/flow/.gitkeep
@@ -27,6 +28,7 @@ node_modules/
 /apps/web-dashboard/dist/
 /apps/web-dashboard/dist-smoke/
 /apps/web-dashboard/dist-task-due-picker-smoke/
+/apps/web-dashboard/dist-review-web-smoke/
 /apps/desktop/dist/
 /packages/agent-client/dist/
 

@@ -10,7 +10,10 @@ export type CaptureActionName =
   | "reminder-create"
   | "reminder-acknowledge"
   | "reminder-cancel"
-  | "reminder-reschedule";
+  | "reminder-reschedule"
+  | "pkos.review.rating"
+  | "pkos.review.rating_batch"
+  | "pkos.review.correction";
 
 export type ActionAttemptStatus =
   | "draft"
@@ -141,6 +144,15 @@ function endpointForAction(draft: ActionDraft): string {
   if (draft.actionName === "reminder-reschedule" && typeof draft.body.reminderId === "string") {
     return `/api/pkos/reminders/${encodeURIComponent(draft.body.reminderId)}/reschedule`;
   }
+  if (draft.actionName === "pkos.review.rating") {
+    return "/api/pkos/review/ratings";
+  }
+  if (draft.actionName === "pkos.review.rating_batch") {
+    return "/api/pkos/review/ratings:batch";
+  }
+  if (draft.actionName === "pkos.review.correction") {
+    return "/api/pkos/review/corrections";
+  }
   return "/api/actions/invalid";
 }
 
@@ -172,13 +184,21 @@ function statusFromErrorCode(code: string): ActionAttemptStatus {
     code === "invalid_status" ||
     code === "invalid_due_at" ||
     code === "invalid_remind_at" ||
+    code === "invalid_reviewed_at" ||
+    code === "invalid_rating" ||
     code === "invalid_priority" ||
     code === "invalid_title" ||
     code === "invalid_reason" ||
     code === "invalid_note" ||
     code === "task_not_found" ||
     code === "invalid_task_reference" ||
-    code === "reminder_not_found"
+    code === "reminder_not_found" ||
+    code === "object_not_found" ||
+    code === "object_not_reviewable" ||
+    code === "target_event_not_found" ||
+    code === "correction_target_not_latest" ||
+    code === "invalid_items_json" ||
+    code === "no_successful_review_items"
   ) {
     return "invalid_input";
   }

@@ -128,6 +128,11 @@ python -m tools.pkos reminder-acknowledge --id reminder_... --reason "seen" --re
 python -m tools.pkos reminder-cancel --id reminder_... --reason "cancelled" --request-id "..."
 python -m tools.pkos reminder-reschedule --id reminder_... --remind-at "2026-07-16T10:00:00Z" --reason "later" --request-id "..."
 python -m tools.pkos reminder-due --json
+python -m tools.pkos review-rebuild --json
+python -m tools.pkos review-queue --json
+python -m tools.pkos review-rate --object-id fact.demo --rating 4 --reviewed-at "2026-07-20T00:00:00Z" --actor human --request-id "review-demo-1" --json
+python -m tools.pkos review-history --object-id fact.demo --json
+python -m tools.pkos review-correct --target-event-id review_... --reason "wrong button" --actor human --request-id "review-correct-1" --json
 ```
 
 `gen-flow` 会生成 `runtime/flow/*.json`。`export-agent-context` 会生成 `runtime/agent_context.json`，供月洛洛读取。二者都是只读派生命令，不修改 `objects/`、`docs/`、schema 或 trusted 状态。
@@ -209,6 +214,24 @@ Reminder v0.7-beta is a separate human-managed one-shot authority. It writes onl
 `task dueAt` never creates a reminder automatically. Reminder runtime delivery attempts live in Agent Server SQLite only as rebuildable runtime state; SQLite is not Reminder authority. Web Dashboard can create/list/acknowledge/cancel/reschedule reminders through fixed confirmed APIs. Desktop shows a due reminder runtime panel but does not create native OS notifications in this MVP.
 
 See `docs/REMINDER_CONTRACT.md`.
+
+## Review/SRS v0.8-alpha
+
+Review/SRS is a human-managed authority flow. New review ratings append
+`review_rating` events under `review/logs/YYYY-MM-DD.jsonl`; corrections append
+`review_correction` events. Historical review JSONL lines are never edited.
+
+`runtime/review/current.json`, `runtime/review/queue.json`, and `object.srs`
+are projections. They can be rebuilt from review events plus explicit
+`legacy_unverified` object SRS state. If the data root is a Git repository, the
+review CLI commits only the changed data-root review files; if not, it returns
+`gitCommitCreated: false`.
+
+Only `fact`, `skill`, and `claim` enter default SRS. `creative` remains internal
+writing material. Human ratings use the fixed 1..5 mapping: Again, Hard, Good,
+Easy, Perfect. Agent/LLM code must not grade mastery.
+
+See `docs/REVIEW_SRS_CONTRACT.md`.
 
 ## Moonlolo Bridge CLI
 

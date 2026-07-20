@@ -81,6 +81,7 @@ npm run runtime-identity-smoke
 npm run service-identity-smoke
 npm run reminder-api-smoke
 npm run reminder-scheduler-smoke
+npm run review-api-smoke
 npm run dev
 ```
 
@@ -116,6 +117,12 @@ audit redaction for reminder title/description/reason text.
 It covers due reminder discovery, duplicate scan dedupe, restart persistence,
 SQLite deletion recovery from JSONL authority, scheduler_run events, and the
 rule that scheduler scans do not write Reminder authority logs.
+
+`npm run review-api-smoke` verifies the fixed Review/SRS API against a temporary
+`PKOS_DATA_ROOT`, temporary SQLite database, and the real Python CLI. It covers
+queue/status/get/history reads, confirmed ratings, deterministic partial batch
+retry, correction events, request replay/conflict, stale running recovery, and
+audit redaction for object content and correction reasons.
 
 `npm run llm-readonly-smoke` verifies the real-provider read-only MVP against a local fake Chat Completions server. It does not call an external model. It covers dry-run default behavior, provider configuration validation, per-request external consent, bounded prompt assembly, SSE streaming, tool output rejection, safe error mapping, abort semantics, terminal generation state, and secret redaction.
 

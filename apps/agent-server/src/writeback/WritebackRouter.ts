@@ -1,6 +1,7 @@
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput } from "../tools/builtin/inboxReview.js";
 import type { ReminderActionInput, ReminderCreateInput, ReminderRescheduleInput } from "../tools/builtin/reminderFlow.js";
+import type { ReviewBatchRatingInput, ReviewCorrectionInput, ReviewRatingInput } from "../tools/builtin/reviewFlow.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
 import type { TaskCreateInput, TaskTransitionInput } from "../tools/builtin/taskFlow.js";
 import type { RegisteredToolDefinition, ToolExecutionContext } from "../tools/ToolTypes.js";
@@ -18,6 +19,9 @@ const DIRECT_WRITE_TOOLS = new Set([
   "pkos.reminder.acknowledge",
   "pkos.reminder.cancel",
   "pkos.reminder.reschedule",
+  "pkos.review.rating",
+  "pkos.review.rating_batch",
+  "pkos.review.correction",
 ]);
 
 export class WritebackRouter {
@@ -68,6 +72,15 @@ export class WritebackRouter {
     }
     if (tool.name === "pkos.reminder.reschedule") {
       return this.cli.reminderReschedule(input as ReminderRescheduleInput);
+    }
+    if (tool.name === "pkos.review.rating") {
+      return this.cli.reviewRate(input as ReviewRatingInput);
+    }
+    if (tool.name === "pkos.review.rating_batch") {
+      return this.cli.reviewRateBatch(input as ReviewBatchRatingInput);
+    }
+    if (tool.name === "pkos.review.correction") {
+      return this.cli.reviewCorrect(input as ReviewCorrectionInput);
     }
 
     return Promise.resolve(

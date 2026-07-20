@@ -9,6 +9,8 @@ Usage:
   python -m tools.pkos inbox-append --capture-type note --content "..."
   python -m tools.pkos inbox-review list [--json]
   python -m tools.pkos inbox-review mark --id <inbox_id> --status archived --reason "reviewed"
+  python -m tools.pkos review-queue [--json]
+  python -m tools.pkos review-rate --object-id <id> --rating 4 --reviewed-at <iso> --actor human --request-id <id> --json
   python -m tools.pkos state-list [--json]
   python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
   python -m tools.pkos paths [--json]
@@ -71,6 +73,17 @@ from tools.reminder_flow.reminders import (
     run_get as run_reminder_get,
     run_list as run_reminder_list,
 )
+from tools.review_flow.review import (
+    ReviewFlowError,
+    run_correct as run_review_correct,
+    run_get as run_review_get,
+    run_history as run_review_history,
+    run_queue as run_review_queue,
+    run_rate as run_review_rate,
+    run_rate_batch as run_review_rate_batch,
+    run_rebuild as run_review_rebuild,
+    run_status as run_review_status,
+)
 from tools.task_flow.tasks import (
     PRIORITIES as TASK_PRIORITIES,
     STATUSES as TASK_STATUSES,
@@ -103,6 +116,15 @@ COMMAND_NAMES = {
     "export-agent-context",
     "inbox-append",
     "inbox-review",
+    "review-list",
+    "review-get",
+    "review-rate",
+    "review-rate-batch",
+    "review-history",
+    "review-rebuild",
+    "review-queue",
+    "review-correct",
+    "review-status",
     "task-create",
     "task-list",
     "task-transition",
@@ -417,6 +439,89 @@ def main() -> int:
     inbox_review_mark.add_argument("--inbox-path", default="inbox/items.jsonl")
     inbox_review_mark.add_argument("--actions-path", default="review/logs/inbox_review_actions.jsonl")
     inbox_review_mark.add_argument("--runtime-path", default="runtime/inbox_review/current.json")
+
+    review_common_paths = {
+        "--objects-dir": {"default": "objects", "help": "Objects authority directory"},
+        "--review-dir": {"default": "review", "help": "Review authority directory"},
+        "--current-path": {"default": "runtime/review/current.json", "help": "Review current projection path"},
+        "--queue-path": {"default": "runtime/review/queue.json", "help": "Review queue projection path"},
+    }
+
+    review_rebuild = subparsers.add_parser("review-rebuild", help="Rebuild Review/SRS runtime projections")
+    review_rebuild.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+    review_rebuild.add_argument("--review-dir", **review_common_paths["--review-dir"])
+    review_rebuild.add_argument("--current-path", **review_common_paths["--current-path"])
+    review_rebuild.add_argument("--queue-path", **review_common_paths["--queue-path"])
+    review_rebuild.add_argument("--now", default=None)
+    review_rebuild.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    for command_name, help_text in [
+        ("review-queue", "List due/upcoming Review/SRS queue"),
+        ("review-list", "Alias for Review/SRS queue listing"),
+    ]:
+        review_queue = subparsers.add_parser(command_name, help=help_text)
+        review_queue.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+        review_queue.add_argument("--review-dir", **review_common_paths["--review-dir"])
+        review_queue.add_argument("--current-path", **review_common_paths["--current-path"])
+        review_queue.add_argument("--queue-path", **review_common_paths["--queue-path"])
+        review_queue.add_argument("--now", default=None)
+        review_queue.add_argument("--limit", type=int, default=None)
+        review_queue.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    review_get = subparsers.add_parser("review-get", help="Get one Review/SRS current item")
+    review_get.add_argument("--object-id", required=True)
+    review_get.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+    review_get.add_argument("--review-dir", **review_common_paths["--review-dir"])
+    review_get.add_argument("--now", default=None)
+    review_get.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    review_history = subparsers.add_parser("review-history", help="Show one object's review history")
+    review_history.add_argument("--object-id", required=True)
+    review_history.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+    review_history.add_argument("--review-dir", **review_common_paths["--review-dir"])
+    review_history.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    review_status = subparsers.add_parser("review-status", help="Show bounded Review/SRS status counts")
+    review_status.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+    review_status.add_argument("--review-dir", **review_common_paths["--review-dir"])
+    review_status.add_argument("--now", default=None)
+    review_status.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    review_rate = subparsers.add_parser("review-rate", help="Append one Review/SRS rating event")
+    review_rate.add_argument("--object-id", required=True)
+    review_rate.add_argument("--rating", required=True, type=int)
+    review_rate.add_argument("--reviewed-at", required=True)
+    review_rate.add_argument("--actor", required=True)
+    review_rate.add_argument("--request-id", required=True)
+    review_rate.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+    review_rate.add_argument("--review-dir", **review_common_paths["--review-dir"])
+    review_rate.add_argument("--current-path", **review_common_paths["--current-path"])
+    review_rate.add_argument("--queue-path", **review_common_paths["--queue-path"])
+    review_rate.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    review_rate_batch = subparsers.add_parser("review-rate-batch", help="Append deterministic partial Review/SRS rating batch")
+    review_rate_batch.add_argument("--items-json", required=True, help="JSON array of {objectId,rating} items")
+    review_rate_batch.add_argument("--reviewed-at", required=True)
+    review_rate_batch.add_argument("--actor", required=True)
+    review_rate_batch.add_argument("--request-id", required=True)
+    review_rate_batch.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+    review_rate_batch.add_argument("--review-dir", **review_common_paths["--review-dir"])
+    review_rate_batch.add_argument("--current-path", **review_common_paths["--current-path"])
+    review_rate_batch.add_argument("--queue-path", **review_common_paths["--queue-path"])
+    review_rate_batch.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    review_correct = subparsers.add_parser("review-correct", help="Append a Review/SRS correction event")
+    review_correct.add_argument("--target-event-id", required=True)
+    review_correct.add_argument("--corrected-rating", type=int, default=None)
+    review_correct.add_argument("--reason", required=True)
+    review_correct.add_argument("--actor", required=True)
+    review_correct.add_argument("--request-id", required=True)
+    review_correct.add_argument("--created-at", default=None)
+    review_correct.add_argument("--objects-dir", **review_common_paths["--objects-dir"])
+    review_correct.add_argument("--review-dir", **review_common_paths["--review-dir"])
+    review_correct.add_argument("--current-path", **review_common_paths["--current-path"])
+    review_correct.add_argument("--queue-path", **review_common_paths["--queue-path"])
+    review_correct.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
 
     task_create = subparsers.add_parser("task-create", help="Append a formal Task creation record")
     task_create.add_argument("--title", required=True)
@@ -762,6 +867,107 @@ def main() -> int:
                 if item:
                     print(f"effective_status: {item.get('effective_status')}")
             return 0
+
+    if args.command in {
+        "review-rebuild",
+        "review-queue",
+        "review-list",
+        "review-get",
+        "review-rate",
+        "review-rate-batch",
+        "review-history",
+        "review-correct",
+        "review-status",
+    }:
+        objects_dir = resolve_data_path(args.objects_dir)
+        review_dir = resolve_data_path(args.review_dir)
+        current_path = resolve_data_path(args.current_path) if hasattr(args, "current_path") else resolve_data_path("runtime/review/current.json")
+        queue_path = resolve_data_path(args.queue_path) if hasattr(args, "queue_path") else resolve_data_path("runtime/review/queue.json")
+        try:
+            if args.command == "review-rebuild":
+                payload = run_review_rebuild(objects_dir, review_dir, current_path, queue_path, now=args.now)
+            elif args.command in {"review-queue", "review-list"}:
+                payload = run_review_queue(objects_dir, review_dir, current_path, queue_path, now=args.now, limit=args.limit)
+            elif args.command == "review-get":
+                payload = run_review_get(objects_dir, review_dir, args.object_id, now=args.now)
+            elif args.command == "review-history":
+                payload = run_review_history(objects_dir, review_dir, args.object_id)
+            elif args.command == "review-status":
+                payload = run_review_status(objects_dir, review_dir, now=args.now)
+            elif args.command == "review-rate":
+                payload = run_review_rate(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    current_path,
+                    queue_path,
+                    object_id=args.object_id,
+                    rating=args.rating,
+                    reviewed_at=args.reviewed_at,
+                    actor=args.actor,
+                    request_id=args.request_id,
+                )
+            elif args.command == "review-rate-batch":
+                try:
+                    items = json.loads(args.items_json)
+                except json.JSONDecodeError as exc:
+                    raise ReviewFlowError("invalid_items_json", f"items-json must be valid JSON: {exc.msg}") from exc
+                if not isinstance(items, list):
+                    raise ReviewFlowError("invalid_items_json", "items-json must be a JSON array")
+                payload = run_review_rate_batch(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    current_path,
+                    queue_path,
+                    items=items,
+                    reviewed_at=args.reviewed_at,
+                    actor=args.actor,
+                    request_id=args.request_id,
+                )
+            else:
+                payload = run_review_correct(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    current_path,
+                    queue_path,
+                    target_event_id=args.target_event_id,
+                    corrected_rating=args.corrected_rating,
+                    reason=args.reason,
+                    actor=args.actor,
+                    request_id=args.request_id,
+                    created_at=args.created_at,
+                )
+        except ReviewFlowError as exc:
+            if args.json_output:
+                _print_json(_json_error(exc.code, exc.message))
+                return 1
+            print(f"ERROR [{exc.code}]: {exc.message}")
+            return 1
+
+        if args.json_output:
+            _print_json(payload)
+        elif args.command in {"review-queue", "review-list"}:
+            print(f"evaluated_at: {payload['evaluatedAt']}")
+            print(f"due: {payload['counts']['due']}")
+            for item in payload["due"]:
+                print(f"{item['objectId']} | {item['objectType']} | {item['dueAt']} | {item['title']}")
+        elif args.command == "review-history":
+            print(f"count: {payload['count']}")
+            for event in payload["events"]:
+                print(f"{event.get('id')} | {event.get('type')} | {event.get('rating', event.get('correctedRating', ''))}")
+        elif args.command == "review-get":
+            item = payload["item"]
+            print(f"{item['objectId']} | {item['objectType']} | due {item['dueAt']}")
+        elif args.command == "review-status":
+            print(f"due: {payload['counts']['due']}")
+            print(f"overdue: {payload['counts']['overdue']}")
+            print(f"upcoming: {payload['counts']['upcoming']}")
+        else:
+            event = payload.get("event") or {}
+            print(f"{payload.get('status')}: {event.get('id')}")
+        return 0
 
     if args.command in {"task-create", "task-list", "task-transition", "task-rebuild"}:
         items_path = resolve_data_path(args.items_path)

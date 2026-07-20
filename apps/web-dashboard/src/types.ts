@@ -148,3 +148,67 @@ export type ReminderListResponse = {
   filters: JsonObject;
   source: JsonObject;
 };
+
+export type ReviewQueueItem = {
+  objectId: string;
+  objectType: string;
+  title: string;
+  status: string;
+  dueAt: string;
+  lastReviewedAt: string;
+  repetitions: number;
+  intervalDays: number;
+  easeFactor: number;
+  contentChangedSinceLastReview: boolean;
+  legacyWarning: string | null;
+  overdueDays: number;
+};
+
+export type ReviewQueueResponse = {
+  ok: boolean;
+  generatedAt: string;
+  evaluatedAt: string;
+  due: ReviewQueueItem[];
+  upcoming: ReviewQueueItem[];
+  counts: {
+    due: number;
+    overdue: number;
+    upcoming: number;
+    legacyWarning: number;
+    contentChanged: number;
+    orphaned: number;
+  };
+  source: JsonObject;
+};
+
+export type ReviewItemResponse = {
+  ok: boolean;
+  item: ReviewQueueItem & {
+    objectContentSha256?: string | null;
+    orphaned?: boolean;
+    lastReviewEventId?: string | null;
+    latestCorrectionEventId?: string | null;
+  };
+  generated_at?: string;
+  generatedAt?: string;
+};
+
+export type ReviewHistoryEvent = JsonObject & {
+  id?: string;
+  type?: string;
+  rating?: number;
+  correctedRating?: number | null;
+  reviewedAt?: string;
+  createdAt?: string;
+  algorithmId?: string;
+  algorithmVersion?: number;
+  resultingState?: JsonObject;
+};
+
+export type ReviewHistoryResponse = {
+  ok: boolean;
+  objectId: string;
+  objectExists: boolean;
+  events: ReviewHistoryEvent[];
+  count: number;
+};

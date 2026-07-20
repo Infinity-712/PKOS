@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist-review-web-smoke",
+    "rootDir": "src",
+    "noEmit": false,
+    "tsBuildInfoFile": "dist-review-web-smoke/.tsbuildinfo"
+  },
+  "include": ["src/scripts/reviewWebSmoke.ts", "src/**/*.ts", "src/**/*.tsx"],
+  "exclude": []
+}
