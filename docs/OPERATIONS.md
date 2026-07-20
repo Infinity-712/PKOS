@@ -37,6 +37,44 @@ pkos-core   # public-safe: tools, docs, schema, demo
 pkos-vault  # private: objects, inbox, state, review logs, digests, runtime
 ```
 
+## Local Agent Runtime Identity
+
+Recommended Agent Server startup:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 validate
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 start
+```
+
+`local-runtime.ps1 start` reuses an existing listener only when all identity
+checks match:
+
+- runtime fingerprint;
+- service build fingerprint;
+- API contract version;
+- declared capability manifest;
+- SQLite schema compatibility.
+
+If the data/runtime instance differs, the script returns
+`AGENT_SERVER_RUNTIME_MISMATCH`.
+
+If the same runtime is served by an old Agent Server build, a server missing a
+required capability, or an incompatible schema, the script returns
+`AGENT_SERVER_BUILD_MISMATCH`.
+
+The script does not auto-kill stale or unknown listeners. Stop the process
+manually after inspecting it.
+
+Useful checks:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 show
+curl http://127.0.0.1:8790/health
+curl http://127.0.0.1:8790/api/runtime-info
+```
+
+See `docs/SERVICE_IDENTITY_CONTRACT.md`.
+
 ## 日常流程
 
 1. 校验对象：

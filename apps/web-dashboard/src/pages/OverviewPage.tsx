@@ -43,6 +43,16 @@ export function OverviewPage() {
           </dd>
           <dt>service</dt>
           <dd>{health?.service ?? "unknown"}</dd>
+          <dt>Service build</dt>
+          <dd>{health?.serviceBuildFingerprint ?? "unknown"}</dd>
+          <dt>API contract</dt>
+          <dd>{health?.apiContractVersion ?? "unknown"}</dd>
+          <dt>DB compatibility</dt>
+          <dd>
+            <span className={health?.databaseCompatible === false ? "badge bad" : "badge good"}>
+              {health?.databaseCompatible === false ? "stale schema" : "compatible"}
+            </span>
+          </dd>
           <dt>mode</dt>
           <dd>{health?.mode ?? "unknown"}</dd>
           <dt>error</dt>

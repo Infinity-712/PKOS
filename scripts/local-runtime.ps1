@@ -62,6 +62,148 @@ function Get-RuntimeFingerprint {
   return (Get-Sha256 ((Normalize-RuntimePath $ResolvedCoreRoot) + "`n" + (Normalize-RuntimePath $ResolvedDataRoot) + "`n" + (Normalize-RuntimePath $AgentDbPath))).Substring(0, 16)
 }
 
+function ConvertTo-CanonicalJson {
+  param($Value)
+  if ($null -eq $Value) {
+    return "null"
+  }
+  if ($Value -is [string]) {
+    return ($Value | ConvertTo-Json -Compress)
+  }
+  if ($Value -is [bool]) {
+    return $(if ($Value) { "true" } else { "false" })
+  }
+  if ($Value -is [byte] -or $Value -is [int16] -or $Value -is [int] -or $Value -is [long] -or $Value -is [single] -or $Value -is [double] -or $Value -is [decimal]) {
+    return ($Value | ConvertTo-Json -Compress)
+  }
+  if ($Value -is [System.Collections.IEnumerable] -and -not ($Value -is [string]) -and -not ($Value -is [System.Collections.IDictionary]) -and -not ($Value -is [pscustomobject])) {
+    $items = @()
+    foreach ($item in $Value) {
+      $items += (ConvertTo-CanonicalJson $item)
+    }
+    return "[" + ($items -join ",") + "]"
+  }
+  $properties = @()
+  if ($Value -is [System.Collections.IDictionary]) {
+    foreach ($key in $Value.Keys) {
+      $properties += [PSCustomObject]@{ Name = [string]$key; Value = $Value[$key] }
+    }
+  } else {
+    foreach ($property in $Value.PSObject.Properties) {
+      $properties += [PSCustomObject]@{ Name = [string]$property.Name; Value = $property.Value }
+    }
+  }
+  $members = @()
+  foreach ($property in @($properties | Sort-Object Name)) {
+    $members += (($property.Name | ConvertTo-Json -Compress) + ":" + (ConvertTo-CanonicalJson $property.Value))
+  }
+  return "{" + ($members -join ",") + "}"
+}
+
+function Get-ServiceCapabilityManifestPath {
+  return Join-Path $RepoRoot "apps\agent-server\service-capabilities.json"
+}
+
+function Read-ServiceCapabilityManifest {
+  $manifestPath = Get-ServiceCapabilityManifestPath
+  if (-not (Test-Path $manifestPath)) {
+    Fail-Code "SERVICE_CAPABILITY_MANIFEST_MISSING"
+  }
+  $manifest = Get-Content -Raw $manifestPath | ConvertFrom-Json
+  if (-not $manifest.service -or $manifest.service.name -ne "pkos-agent-server") {
+    Fail-Code "SERVICE_CAPABILITY_MANIFEST_INVALID" "service.name"
+  }
+  if (-not $manifest.service.version -or -not $manifest.service.apiContractVersion) {
+    Fail-Code "SERVICE_CAPABILITY_MANIFEST_INVALID" "service version/api contract"
+  }
+  if (-not $manifest.database -or -not $manifest.database.requiredSchemaVersion) {
+    Fail-Code "SERVICE_CAPABILITY_MANIFEST_INVALID" "required schema"
+  }
+  $capabilities = @($manifest.capabilities | ForEach-Object { [string]$_ })
+  if ($capabilities.Count -eq 0) {
+    Fail-Code "SERVICE_CAPABILITY_MANIFEST_INVALID" "capabilities"
+  }
+  $uniqueCapabilities = @($capabilities | Sort-Object -Unique)
+  if ($uniqueCapabilities.Count -ne $capabilities.Count) {
+    Fail-Code "SERVICE_CAPABILITY_MANIFEST_INVALID" "duplicate capabilities"
+  }
+  return [PSCustomObject]@{
+    SchemaVersion = [string]$manifest.schemaVersion
+    ServiceName = [string]$manifest.service.name
+    ServiceVersion = [string]$manifest.service.version
+    ApiContractVersion = [string]$manifest.service.apiContractVersion
+    RequiredDatabaseSchema = [int]$manifest.database.requiredSchemaVersion
+    Capabilities = @($uniqueCapabilities)
+  }
+}
+
+function Convert-ServiceManifestToCanonicalObject {
+  param($Manifest)
+  return [ordered]@{
+    capabilities = @($Manifest.Capabilities)
+    database = [ordered]@{
+      requiredSchemaVersion = [int]$Manifest.RequiredDatabaseSchema
+    }
+    schemaVersion = [string]$Manifest.SchemaVersion
+    service = [ordered]@{
+      apiContractVersion = [string]$Manifest.ApiContractVersion
+      name = [string]$Manifest.ServiceName
+      version = [string]$Manifest.ServiceVersion
+    }
+  }
+}
+
+function Get-GitOutput {
+  param([array]$Arguments)
+  try {
+    $output = & git -C $RepoRoot @Arguments 2>$null
+    if ($LASTEXITCODE -eq 0) {
+      return (($output | Out-String).Trim())
+    }
+  } catch {
+    return $null
+  }
+  return $null
+}
+
+function Get-ServiceSourceRevision {
+  if (-not [string]::IsNullOrWhiteSpace($env:PKOS_BUILD_REVISION)) {
+    return ([string]$env:PKOS_BUILD_REVISION).Trim()
+  }
+  $revision = Get-GitOutput -Arguments @("rev-parse", "HEAD")
+  if ([string]::IsNullOrWhiteSpace($revision)) {
+    return "unknown"
+  }
+  return $revision
+}
+
+function Get-ServiceSourceDirty {
+  if (-not [string]::IsNullOrWhiteSpace($env:PKOS_BUILD_DIRTY)) {
+    return (([string]$env:PKOS_BUILD_DIRTY).Trim().ToLowerInvariant() -eq "true")
+  }
+  $status = Get-GitOutput -Arguments @("status", "--porcelain")
+  return (-not [string]::IsNullOrWhiteSpace($status))
+}
+
+function Get-ServiceBuildIdentity {
+  $manifest = Read-ServiceCapabilityManifest
+  $canonical = ConvertTo-CanonicalJson (Convert-ServiceManifestToCanonicalObject $manifest)
+  $revision = Get-ServiceSourceRevision
+  $dirty = Get-ServiceSourceDirty
+  $sourceRevision = $revision + $(if ($dirty) { "+dirty" } else { "" })
+  return [PSCustomObject]@{
+    Name = $manifest.ServiceName
+    Version = $manifest.ServiceVersion
+    ApiContractVersion = $manifest.ApiContractVersion
+    RequiredDatabaseSchema = $manifest.RequiredDatabaseSchema
+    Capabilities = @($manifest.Capabilities)
+    ManifestFingerprint = (Get-Sha256 $canonical).Substring(0, 16)
+    BuildFingerprint = (Get-Sha256 ($canonical + "`n" + $sourceRevision)).Substring(0, 16)
+    SourceRevision = $revision
+    Dirty = $dirty
+  }
+}
+
 function Assert-CoreRoot {
   param([string]$ResolvedCoreRoot)
   foreach ($required in @("apps", "tools", "docs")) {
@@ -144,6 +286,7 @@ function Resolve-RuntimeConfig {
   $startDesktop = if ($profile -and $profile.start -and $null -ne $profile.start.desktop) { [bool]$profile.start.desktop } else { $false }
   $agentDbPath = Join-Path $resolvedDataRoot "runtime\agent\agent.sqlite"
   $fingerprint = Get-RuntimeFingerprint $resolvedCoreRoot $resolvedDataRoot $agentDbPath
+  $serviceBuild = Get-ServiceBuildIdentity
   return [PSCustomObject]@{
     Profile = $profile
     ProfileName = if ($profile -and $profile.profileName) { [string]$profile.profileName } else { $ProfileName }
@@ -158,6 +301,7 @@ function Resolve-RuntimeConfig {
     StartDesktop = $startDesktop
     RuntimeFingerprint = $fingerprint
     DataRootFingerprint = (Get-Sha256 (Normalize-RuntimePath $resolvedDataRoot)).Substring(0, 16)
+    ServiceBuild = $serviceBuild
   }
 }
 
@@ -204,6 +348,12 @@ function Show-Runtime {
   Write-Info "startDesktop $($config.StartDesktop)"
   Write-Info "dbExists $(Test-Path $config.AgentDbPath)"
   Write-Info "runtimeFingerprint $($config.RuntimeFingerprint)"
+  Write-Info "serviceName $($config.ServiceBuild.Name)"
+  Write-Info "serviceVersion $($config.ServiceBuild.Version)"
+  Write-Info "apiContractVersion $($config.ServiceBuild.ApiContractVersion)"
+  Write-Info "serviceBuildFingerprint $($config.ServiceBuild.BuildFingerprint)"
+  Write-Info "requiredDatabaseSchema $($config.ServiceBuild.RequiredDatabaseSchema)"
+  Write-Info "serviceCapabilities $($config.ServiceBuild.Capabilities -join ',')"
   if ((Normalize-RuntimePath $config.CoreRoot) -eq (Normalize-RuntimePath $config.DataRoot)) {
     Write-Info "warning CORE_ROOT_EQUALS_DATA_ROOT"
   }
@@ -223,17 +373,76 @@ function Get-RuntimeInfoFromPort {
   }
 }
 
+function Test-AgentServerCompatibility {
+  param($Config, $RuntimeInfo)
+  if (-not $RuntimeInfo) {
+    return [PSCustomObject]@{ Kind = "build"; Reason = "runtime_info_unavailable"; MissingCapabilities = @(); ActualBuild = "none"; ActualSchema = "unknown"; ActualApiContract = "unknown" }
+  }
+  if ($RuntimeInfo.runtimeFingerprint -ne $Config.RuntimeFingerprint) {
+    return [PSCustomObject]@{ Kind = "runtime"; Reason = "runtime_fingerprint_mismatch"; MissingCapabilities = @(); ActualBuild = "unknown"; ActualSchema = "unknown"; ActualApiContract = "unknown" }
+  }
+  if (-not $RuntimeInfo.service -or ($RuntimeInfo.service -is [string])) {
+    return [PSCustomObject]@{ Kind = "build"; Reason = "service_identity_missing"; MissingCapabilities = @(); ActualBuild = "none"; ActualSchema = "unknown"; ActualApiContract = "unknown" }
+  }
+  $actualBuild = if ($RuntimeInfo.service.buildFingerprint) { [string]$RuntimeInfo.service.buildFingerprint } else { "none" }
+  $actualApiContract = if ($RuntimeInfo.service.apiContractVersion) { [string]$RuntimeInfo.service.apiContractVersion } else { "unknown" }
+  $actualSchema = if ($RuntimeInfo.database -and $null -ne $RuntimeInfo.database.schemaVersion) { [string]$RuntimeInfo.database.schemaVersion } else { "unknown" }
+  if ($RuntimeInfo.service.name -ne $Config.ServiceBuild.Name) {
+    return [PSCustomObject]@{ Kind = "build"; Reason = "service_name_mismatch"; MissingCapabilities = @(); ActualBuild = $actualBuild; ActualSchema = $actualSchema; ActualApiContract = $actualApiContract }
+  }
+  if ($actualApiContract -ne $Config.ServiceBuild.ApiContractVersion) {
+    return [PSCustomObject]@{ Kind = "build"; Reason = "api_contract_mismatch"; MissingCapabilities = @(); ActualBuild = $actualBuild; ActualSchema = $actualSchema; ActualApiContract = $actualApiContract }
+  }
+  if ($actualBuild -ne $Config.ServiceBuild.BuildFingerprint) {
+    return [PSCustomObject]@{ Kind = "build"; Reason = "service_build_mismatch"; MissingCapabilities = @(); ActualBuild = $actualBuild; ActualSchema = $actualSchema; ActualApiContract = $actualApiContract }
+  }
+  $actualCapabilities = @()
+  if ($RuntimeInfo.service.capabilities) {
+    $actualCapabilities = @($RuntimeInfo.service.capabilities | ForEach-Object { [string]$_ })
+  }
+  $actualCapabilitySet = @{}
+  foreach ($capability in $actualCapabilities) {
+    $actualCapabilitySet[$capability] = $true
+  }
+  $missingCapabilities = @()
+  foreach ($capability in @($Config.ServiceBuild.Capabilities)) {
+    if (-not $actualCapabilitySet.ContainsKey($capability)) {
+      $missingCapabilities += $capability
+    }
+  }
+  if ($missingCapabilities.Count -gt 0) {
+    return [PSCustomObject]@{ Kind = "build"; Reason = "missing_capabilities"; MissingCapabilities = @($missingCapabilities); ActualBuild = $actualBuild; ActualSchema = $actualSchema; ActualApiContract = $actualApiContract }
+  }
+  $actualSchemaNumber = if ($RuntimeInfo.database -and $null -ne $RuntimeInfo.database.schemaVersion) { [int]$RuntimeInfo.database.schemaVersion } else { -1 }
+  $actualCompatible = if ($RuntimeInfo.database -and $null -ne $RuntimeInfo.database.compatible) { [bool]$RuntimeInfo.database.compatible } else { $false }
+  if ($actualSchemaNumber -lt $Config.ServiceBuild.RequiredDatabaseSchema -or -not $actualCompatible) {
+    return [PSCustomObject]@{ Kind = "build"; Reason = "schema_incompatible"; MissingCapabilities = @(); ActualBuild = $actualBuild; ActualSchema = $actualSchema; ActualApiContract = $actualApiContract }
+  }
+  return [PSCustomObject]@{ Kind = "compatible"; Reason = "ok"; MissingCapabilities = @(); ActualBuild = $actualBuild; ActualSchema = $actualSchema; ActualApiContract = $actualApiContract }
+}
+
+function Write-BuildMismatch {
+  param($Config, $Result, [int]$ListenerPid = 0)
+  $missing = if ($Result.MissingCapabilities -and $Result.MissingCapabilities.Count -gt 0) { $Result.MissingCapabilities -join "," } else { "none" }
+  Write-Output "AGENT_SERVER_BUILD_MISMATCH expectedBuild=$($Config.ServiceBuild.BuildFingerprint) actualBuild=$($Result.ActualBuild) expectedApi=$($Config.ServiceBuild.ApiContractVersion) actualApi=$($Result.ActualApiContract) expectedSchema=$($Config.ServiceBuild.RequiredDatabaseSchema) actualSchema=$($Result.ActualSchema) missingCapabilities=$missing reason=$($Result.Reason) pid=$ListenerPid"
+}
+
 function Start-LocalRuntime {
   $config = Resolve-RuntimeConfig $DataRoot $CoreRoot
   New-Item -ItemType Directory -Force -Path (Split-Path $config.AgentDbPath -Parent) | Out-Null
   $listener = Test-PortListener $config.AgentPort
   if ($listener) {
     $runtimeInfo = Get-RuntimeInfoFromPort $config.AgentPort
-    if ($runtimeInfo -and $runtimeInfo.runtimeFingerprint -eq $config.RuntimeFingerprint) {
-      Write-Info "AGENT_SERVER_ALREADY_RUNNING_SAME_RUNTIME $($config.RuntimeFingerprint)"
+    $compatibility = Test-AgentServerCompatibility $config $runtimeInfo
+    if ($compatibility.Kind -eq "compatible") {
+      Write-Info "AGENT_SERVER_ALREADY_RUNNING_SAME_RUNTIME_AND_BUILD runtime=$($config.RuntimeFingerprint) build=$($config.ServiceBuild.BuildFingerprint)"
       return
     }
-    Write-Output "AGENT_SERVER_RUNTIME_MISMATCH expected=$($config.RuntimeFingerprint) actual=$($runtimeInfo.runtimeFingerprint) pid=$($listener.OwningProcess)"
+    if ($compatibility.Kind -eq "runtime") {
+      Write-Output "AGENT_SERVER_RUNTIME_MISMATCH expected=$($config.RuntimeFingerprint) actual=$($runtimeInfo.runtimeFingerprint) pid=$($listener.OwningProcess)"
+      exit 1
+    }
+    Write-BuildMismatch $config $compatibility ([int]$listener.OwningProcess)
     exit 1
   }
 
@@ -245,7 +454,7 @@ function Start-LocalRuntime {
   $agent = Start-Process -FilePath "npm.cmd" -ArgumentList @("run", "dev") -WorkingDirectory (Join-Path $config.CoreRoot "apps\agent-server") -WindowStyle Hidden -PassThru
   Add-ProcessRecord "agent-server" $agent.Id $agent.StartTime $config.RuntimeFingerprint
   Wait-AgentReady $config
-  Write-Info "AGENT_SERVER_STARTED pid=$($agent.Id) runtime=$($config.RuntimeFingerprint)"
+  Write-Info "AGENT_SERVER_STARTED pid=$($agent.Id) runtime=$($config.RuntimeFingerprint) build=$($config.ServiceBuild.BuildFingerprint)"
 
   if ($config.StartWebDashboard) {
     $webListener = Test-PortListener $config.WebPort
@@ -270,8 +479,17 @@ function Wait-AgentReady {
   $deadline = (Get-Date).AddSeconds(15)
   while ((Get-Date) -lt $deadline) {
     $runtimeInfo = Get-RuntimeInfoFromPort $Config.AgentPort
-    if ($runtimeInfo -and $runtimeInfo.runtimeFingerprint -eq $Config.RuntimeFingerprint) {
-      return
+    if ($runtimeInfo) {
+      $compatibility = Test-AgentServerCompatibility $Config $runtimeInfo
+      if ($compatibility.Kind -eq "compatible") {
+        return
+      }
+      if ($compatibility.Kind -eq "runtime") {
+        Write-Output "AGENT_SERVER_RUNTIME_MISMATCH expected=$($Config.RuntimeFingerprint) actual=$($runtimeInfo.runtimeFingerprint) pid=0"
+        exit 1
+      }
+      Write-BuildMismatch $Config $compatibility 0
+      exit 1
     }
     Start-Sleep -Milliseconds 500
   }

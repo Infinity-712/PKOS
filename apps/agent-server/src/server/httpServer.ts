@@ -47,7 +47,7 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       applyCors(req, res);
 
       if (req.method === "GET" && (req.url === "/health" || req.url?.startsWith("/health?"))) {
-        sendJson(res, 200, createHealthPayload(runtimeIdentity));
+        sendJson(res, 200, createHealthPayload(runtimeIdentity, db));
         return;
       }
 

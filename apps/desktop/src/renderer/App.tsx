@@ -118,8 +118,15 @@ function RuntimeIdentityBadge(props: { health: HealthResponse | null; runtimeInf
   const mismatch =
     typeof props.health?.runtimeFingerprint === "string" &&
     props.health.runtimeFingerprint !== props.runtimeInfo.runtimeFingerprint;
+  const serviceBuildMismatch =
+    typeof props.health?.serviceBuildFingerprint === "string" &&
+    props.health.serviceBuildFingerprint !== props.runtimeInfo.service.buildFingerprint;
+  const staleService = serviceBuildMismatch || props.runtimeInfo.database.compatible === false || props.health?.databaseCompatible === false;
   return (
-    <span className={mismatch ? "badge bad runtime-mismatch" : "badge good"} title={mismatch ? "Connected runtime fingerprint does not match health response." : "Connected runtime identity"}>
+    <span
+      className={mismatch || staleService ? "badge bad runtime-mismatch" : "badge good"}
+      title={mismatch ? "Connected runtime fingerprint does not match health response." : staleService ? "Connected Agent Server build or schema is stale." : "Connected runtime identity"}
+    >
       Runtime: {props.runtimeInfo.profileName} / {props.runtimeInfo.dataRoot.label} / {props.runtimeInfo.runtimeFingerprint.slice(0, 8)}
     </span>
   );

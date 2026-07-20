@@ -47,7 +47,7 @@ http://127.0.0.1:5173
 
 ## Pages
 
-- Overview: health, connected status, dev/build marker, enabled capability summary, disabled capability summary.
+- Overview: health, connected status, service build fingerprint, API contract, database compatibility, enabled capability summary, disabled capability summary.
 - Capture: fixed Action API forms for `inbox-append` and `state-append`.
 - State: Current State card, explicit new state snapshot form, and append-only state timeline.
 - Inbox Review: local human review for `archive` and `restore` through fixed API endpoints.

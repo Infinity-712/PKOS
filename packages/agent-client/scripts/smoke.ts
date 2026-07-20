@@ -226,11 +226,25 @@ const client = new AgentApiClient({
     }
     if (url.endsWith("/api/runtime-info")) {
       return jsonResponse({
-        service: "pkos-agent-server",
+        service: {
+          name: "pkos-agent-server",
+          version: "0.7-service-identity",
+          apiContractVersion: "0.7",
+          buildFingerprint: "abcdef1234567890",
+          sourceRevision: "agent-client-smoke",
+          dirty: false,
+          manifestFingerprint: "0123456789abcdef",
+          capabilities: [
+            "runtime-info.v1",
+            "health.v1",
+            "reminder.authority.write",
+            "task.authority.read",
+          ],
+        },
         profileName: "local-main",
         runtimeFingerprint: "runtime123456",
         dataRoot: { label: "PKOS-Data", fingerprint: "data123456789" },
-        database: { exists: true, schemaVersion: 5 },
+        database: { exists: true, schemaVersion: 6, requiredSchemaVersion: 6, compatible: true },
         process: { startedAt: "2026-07-10T00:00:00.000Z", pid: 12345 },
         provider: { profileId: "deepseek-official", modelId: "deepseek-v4-pro", reasoningPreset: "high", keyConfigured: true },
       });
@@ -307,10 +321,29 @@ const client = new AgentApiClient({
 assert(isHealthResponse(await client.health()), "health response guard failed");
 const runtimeInfo = await client.getRuntimeInfo();
 assert(runtimeInfo.profileName === "local-main", "runtime-info client returned wrong profile");
+assert(runtimeInfo.service.name === "pkos-agent-server", "runtime-info service name missing");
+assert(runtimeInfo.service.version === "0.7-service-identity", "runtime-info service version missing");
+assert(runtimeInfo.service.apiContractVersion === "0.7", "runtime-info API contract version missing");
+assert(runtimeInfo.service.buildFingerprint === "abcdef1234567890", "runtime-info build fingerprint missing");
+assert(runtimeInfo.service.capabilities.includes("reminder.authority.write"), "runtime-info capabilities missing reminder authority");
+assert(runtimeInfo.database.requiredSchemaVersion === 6, "runtime-info required schema version missing");
+assert(runtimeInfo.database.compatible === true, "runtime-info database compatible flag missing");
 assert(runtimeInfo.dataRoot.label === "PKOS-Data", "runtime-info data label missing");
 assert(runtimeInfo.provider.keyConfigured === true, "runtime-info keyConfigured missing");
 assert(isRuntimeInfoResponse(runtimeInfo), "runtime-info guard rejected canonical payload");
 assert(!isRuntimeInfoResponse({ ...runtimeInfo, coreRoot: "E:\\\\Creation\\\\Codex\\\\PKOS" }), "runtime-info guard accepted absolute path field");
+assert(
+  !isRuntimeInfoResponse({ ...runtimeInfo, service: { ...runtimeInfo.service, buildFingerprint: "not-a-sha" } }),
+  "runtime-info guard accepted invalid service build fingerprint",
+);
+assert(
+  !isRuntimeInfoResponse({ ...runtimeInfo, service: { ...runtimeInfo.service, capabilities: [...runtimeInfo.service.capabilities, "health.v1"] } }),
+  "runtime-info guard accepted duplicate capabilities",
+);
+assert(
+  !isRuntimeInfoResponse({ ...runtimeInfo, service: { ...runtimeInfo.service, coreRoot: "E:\\\\Creation\\\\Codex\\\\PKOS" } }),
+  "runtime-info guard accepted absolute path under service identity",
+);
 assert(!JSON.stringify(runtimeInfo).includes("SECRET"), "runtime-info leaked key-like value");
 const diagnostics = await client.healthWithDiagnostics();
 assert(diagnostics.requestUrl === "http://127.0.0.1:8790/health", "health diagnostics resolved wrong URL");

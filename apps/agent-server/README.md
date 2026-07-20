@@ -78,6 +78,7 @@ npm run provider-config-smoke
 npm run provider-profile-smoke
 npm run chat-history-smoke
 npm run runtime-identity-smoke
+npm run service-identity-smoke
 npm run reminder-api-smoke
 npm run reminder-scheduler-smoke
 npm run dev
@@ -126,29 +127,38 @@ rule that scheduler scans do not write Reminder authority logs.
 separation, runtime-info redaction, lightweight health identity, and schema
 version reporting.
 
+`npm run service-identity-smoke` verifies the service capability manifest,
+service build fingerprint, capability order independence, source revision/dirty
+handling, runtime-info redaction, and database schema compatibility reporting.
+
 ## Runtime Identity API
 
 `GET /api/runtime-info` is read-only and returns bounded identity metadata. It
-includes service, profile name, short runtime fingerprint, data-root label and
-fingerprint, database existence/schema version, process id/start time, and
-sanitized provider selection/keyConfigured state.
+includes service version, API contract version, service build fingerprint,
+declared capabilities, profile name, short runtime fingerprint, data-root label
+and fingerprint, database existence/schema/required schema/compatibility,
+process id/start time, and sanitized provider selection/keyConfigured state.
 
 The endpoint never returns absolute `coreRoot`, absolute `dataRoot`, DB path,
 API key values, full environment, prompt/context, chat messages, inbox content,
 state notes, or provider raw responses.
 
-`/health` remains lightweight. It may include `profileName` and
-`runtimeFingerprint`, but provider configuration does not make health false.
+`/health` remains lightweight. It includes `profileName`, `runtimeFingerprint`,
+`serviceVersion`, `serviceBuildFingerprint`, `apiContractVersion`, and database
+schema compatibility fields. Provider configuration does not make health false;
+an incompatible database schema does.
 
-Startup logs use `[pkos-runtime]` prefixes and may show local absolute paths in
-the terminal for operator diagnosis. They only print `key_configured true/false`,
-never key values.
+Startup logs use `[pkos-runtime]` and `[pkos-service]` prefixes and may show
+local absolute paths in the terminal for operator diagnosis. They print service
+version, API contract, build fingerprint, source revision, dirty flag, declared
+capabilities, and schema compatibility. They only print `key_configured
+true/false`, never key values.
 
-When testing Desktop chat history after route changes, ensure any old listener on
-`127.0.0.1:8790` has been stopped before starting `npm run dev` again. A stale
-Agent Server process can still answer `/health` and `/api/chat/sessions` while
-returning `404 NOT_FOUND` for newer routes such as
-`GET /api/chat/sessions/:sessionId/messages`.
+When testing route changes, prefer `scripts/local-runtime.ps1 start`. It refuses
+to reuse a listener with the same runtime but a stale service build, missing
+capability, or incompatible schema. A stale Agent Server process can still answer
+older routes while missing newer ones; local-runtime reports
+`AGENT_SERVER_BUILD_MISMATCH` instead of killing it.
 
 ## SQLite Migrations
 

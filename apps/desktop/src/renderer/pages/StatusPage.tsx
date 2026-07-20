@@ -9,6 +9,11 @@ export function StatusPage(props: { client: AgentApiClient; health: HealthRespon
     typeof props.health?.runtimeFingerprint === "string" &&
     typeof props.runtimeInfo?.runtimeFingerprint === "string" &&
     props.health.runtimeFingerprint !== props.runtimeInfo.runtimeFingerprint;
+  const serviceBuildMismatch =
+    typeof props.health?.serviceBuildFingerprint === "string" &&
+    typeof props.runtimeInfo?.service.buildFingerprint === "string" &&
+    props.health.serviceBuildFingerprint !== props.runtimeInfo.service.buildFingerprint;
+  const staleService = serviceBuildMismatch || props.runtimeInfo?.database.compatible === false || props.health?.databaseCompatible === false;
   return (
     <section className="page-grid two-column">
       <section className="panel">
@@ -25,6 +30,10 @@ export function StatusPage(props: { client: AgentApiClient; health: HealthRespon
           </dd>
           <dt>service</dt>
           <dd>{props.health?.service ?? "unknown"}</dd>
+          <dt>Service build</dt>
+          <dd>{props.runtimeInfo?.service.buildFingerprint ?? props.health?.serviceBuildFingerprint ?? "unknown"}</dd>
+          <dt>API contract</dt>
+          <dd>{props.runtimeInfo?.service.apiContractVersion ?? props.health?.apiContractVersion ?? "unknown"}</dd>
           <dt>mode</dt>
           <dd>{props.health?.mode ?? "unknown"}</dd>
           <dt>runtime</dt>
@@ -38,9 +47,16 @@ export function StatusPage(props: { client: AgentApiClient; health: HealthRespon
             )}
           </dd>
           <dt>database</dt>
-          <dd>{props.runtimeInfo ? `schema ${props.runtimeInfo.database.schemaVersion}` : "unknown"}</dd>
+          <dd>{props.runtimeInfo ? `schema ${props.runtimeInfo.database.schemaVersion} / required ${props.runtimeInfo.database.requiredSchemaVersion}` : "unknown"}</dd>
+          <dt>DB compatibility</dt>
+          <dd>
+            <span className={staleService ? "badge bad" : "badge good"}>
+              {props.runtimeInfo?.database.compatible === false || props.health?.databaseCompatible === false ? "stale schema" : "compatible"}
+            </span>
+          </dd>
         </dl>
         {runtimeMismatch ? <p className="notice">The connected Agent Server may be using a different runtime data set.</p> : null}
+        {staleService ? <p className="notice">Connected Agent Server build or schema is stale. Stop it and start the local runtime again.</p> : null}
         {!status.connected ? <p className="notice">请先启动 PKOS Agent Server。</p> : null}
       </section>
       <CurrentStateCard item={props.current} />

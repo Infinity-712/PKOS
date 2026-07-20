@@ -28,9 +28,16 @@ cd apps/agent-server
 npm run dev
 ```
 
-Agent Server startup logs print the resolved runtime identity. If port `8790`
-is occupied by a different fingerprint, stop and inspect it manually; PKOS will
-not silently reuse or kill an unknown runtime.
+Agent Server startup logs print both runtime identity and service build identity.
+If port `8790` is occupied by a different runtime fingerprint, or by the same
+runtime with a stale service build, missing capability, or incompatible schema,
+stop and inspect it manually; PKOS will not silently reuse or kill an unknown
+runtime.
+
+`scripts/local-runtime.ps1 start` reuses an existing Agent Server only when the
+runtime fingerprint, service build fingerprint, API contract version, declared
+capabilities, and SQLite schema compatibility all match. See
+`docs/SERVICE_IDENTITY_CONTRACT.md`.
 
 PKOS 是一个私密个人知识与能动性系统。它把知识对象、复习队列、Digest、本地 dashboard 与后续 Flow Hub 连接在同一个可审计的 Git 文件权威层中。
 

@@ -35,12 +35,14 @@ npm run dev
 
 Electron does not start, stop, or package the Agent Server. If `/health` is unavailable, the app still opens and asks the user to start PKOS Agent Server first.
 
-Desktop calls `GET /api/runtime-info` and displays only the runtime profile,
-data label, and short fingerprint. It never decides the data root, stores the
-runtime profile, stores API keys, or displays absolute local paths. If runtime
-identity cannot be read while health is available, Desktop shows `Runtime
-identity unavailable`. If health and runtime-info fingerprints disagree, Desktop
-shows a visible `runtime-mismatch` warning without blocking chat.
+Desktop calls `GET /api/runtime-info` and displays runtime profile, data label,
+short runtime fingerprint, service build fingerprint, API contract, and database
+schema compatibility. It never decides the data root, stores the runtime
+profile, stores API keys, or displays absolute local paths. If runtime identity
+cannot be read while health is available, Desktop shows `Runtime identity
+unavailable`. If health/runtime-info fingerprints disagree, or the connected
+service build/schema appears stale, Desktop shows a visible warning without
+blocking chat.
 
 ## Features
 
@@ -53,7 +55,7 @@ shows a visible `runtime-mismatch` warning without blocking chat.
 - Quick Capture: explicit Inbox and State append actions with frozen `requestId` retry semantics.
 - Status: backend connectivity plus Current State summary from `GET /api/pkos/state-timeline?limit=1`.
 - Due Reminders: read-only runtime notification panel from `GET /api/runtime/reminder-notifications`; it does not write Reminder authority or create native OS notifications.
-- Runtime identity: profile name, data label, and short fingerprint from `GET /api/runtime-info`.
+- Runtime identity: profile name, data label, short runtime fingerprint, service build, API contract, and schema compatibility from `GET /api/runtime-info`.
 - Open Web Dashboard: fixed allowlisted URL `http://127.0.0.1:5173`.
 
 Provider configuration stays in Agent Server runtime config and environment variables. Desktop has no API key, endpoint, model ID, or arbitrary parameter settings UI. A configured profile is not the same as connected: connection becomes `connected` only after a successful generation completes.

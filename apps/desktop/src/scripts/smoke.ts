@@ -237,6 +237,11 @@ assert(source.includes("runtimeInfo"), "desktop runtime identity state missing")
 assert(source.includes("Runtime:"), "desktop runtime identity display missing");
 assert(source.includes("Runtime identity unavailable"), "desktop runtime identity unavailable fallback missing");
 assert(source.includes("runtime-mismatch"), "desktop runtime mismatch warning missing");
+assert(source.includes("serviceBuildFingerprint"), "desktop service build fingerprint display missing");
+assert(source.includes("databaseCompatible"), "desktop database compatibility display missing");
+assert(source.includes("Service build"), "desktop service build label missing");
+assert(source.includes("DB compatibility"), "desktop DB compatibility label missing");
+assert(source.includes("Connected Agent Server build or schema is stale"), "desktop stale service warning missing");
 assert(source.includes("getRuntimeReminderNotifications"), "desktop reminder notification lookup missing");
 assert(source.includes("Due Reminders"), "desktop due reminder panel missing");
 assert(source.includes("Runtime notification view only"), "desktop reminder runtime-only boundary missing");

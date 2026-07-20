@@ -4,6 +4,7 @@ import { basename, resolve } from "node:path";
 
 import type { AgentPaths } from "../config/paths.js";
 import type { AgentDatabase } from "../db/connection.js";
+import { buildServiceIdentity, databaseCompatible } from "./ServiceIdentity.js";
 
 export type RuntimeFingerprintInput = {
   coreRoot: string;
@@ -29,7 +30,16 @@ export type RuntimeInfoProviderStatus = {
 };
 
 export type RuntimeInfoPayload = {
-  service: "pkos-agent-server";
+  service: {
+    name: "pkos-agent-server";
+    version: string;
+    apiContractVersion: string;
+    buildFingerprint: string;
+    sourceRevision: string;
+    dirty: boolean;
+    capabilities: string[];
+    manifestFingerprint: string;
+  };
   profileName: string;
   runtimeFingerprint: string;
   dataRoot: {
@@ -39,6 +49,8 @@ export type RuntimeInfoPayload = {
   database: {
     exists: boolean;
     schemaVersion: number;
+    requiredSchemaVersion: number;
+    compatible: boolean;
   };
   process: {
     startedAt: string;
@@ -93,8 +105,19 @@ export function createRuntimeInfoPayload(
   providerStatus: RuntimeInfoProviderStatus = {},
 ): RuntimeInfoPayload {
   const selection = providerStatus.selection ?? {};
+  const serviceIdentity = buildServiceIdentity();
+  const currentSchemaVersion = schemaVersion(db);
   return {
-    service: "pkos-agent-server",
+    service: {
+      name: "pkos-agent-server",
+      version: serviceIdentity.version,
+      apiContractVersion: serviceIdentity.apiContractVersion,
+      buildFingerprint: serviceIdentity.buildFingerprint,
+      sourceRevision: serviceIdentity.sourceRevision,
+      dirty: serviceIdentity.dirty,
+      capabilities: serviceIdentity.capabilities,
+      manifestFingerprint: serviceIdentity.manifestFingerprint,
+    },
     profileName: identity.profileName,
     runtimeFingerprint: shortFingerprint(identity.runtimeFingerprint),
     dataRoot: {
@@ -103,7 +126,9 @@ export function createRuntimeInfoPayload(
     },
     database: {
       exists: existsSync(identity.agentDbPath),
-      schemaVersion: schemaVersion(db),
+      schemaVersion: currentSchemaVersion,
+      requiredSchemaVersion: serviceIdentity.requiredDatabaseSchemaVersion,
+      compatible: databaseCompatible(currentSchemaVersion, serviceIdentity.requiredDatabaseSchemaVersion),
     },
     process: {
       startedAt: identity.processStartedAt,
@@ -118,19 +143,34 @@ export function createRuntimeInfoPayload(
   };
 }
 
-export function createHealthPayload(identity: RuntimeIdentity): {
-  ok: true;
+export function createHealthPayload(identity: RuntimeIdentity, db: AgentDatabase): {
+  ok: boolean;
   service: "pkos-agent-server";
   mode: "dry-run";
   runtimeFingerprint: string;
   profileName: string;
+  serviceVersion: string;
+  serviceBuildFingerprint: string;
+  apiContractVersion: string;
+  databaseSchemaVersion: number;
+  databaseRequiredSchemaVersion: number;
+  databaseCompatible: boolean;
 } {
+  const serviceIdentity = buildServiceIdentity();
+  const currentSchemaVersion = schemaVersion(db);
+  const compatible = databaseCompatible(currentSchemaVersion, serviceIdentity.requiredDatabaseSchemaVersion);
   return {
-    ok: true,
+    ok: compatible,
     service: "pkos-agent-server",
     mode: "dry-run",
     runtimeFingerprint: shortFingerprint(identity.runtimeFingerprint),
     profileName: identity.profileName,
+    serviceVersion: serviceIdentity.version,
+    serviceBuildFingerprint: serviceIdentity.buildFingerprint,
+    apiContractVersion: serviceIdentity.apiContractVersion,
+    databaseSchemaVersion: currentSchemaVersion,
+    databaseRequiredSchemaVersion: serviceIdentity.requiredDatabaseSchemaVersion,
+    databaseCompatible: compatible,
   };
 }
 
@@ -153,6 +193,14 @@ export function logRuntimeStartup(input: {
   console.log(`[pkos-runtime] key_configured ${payload.provider.keyConfigured}`);
   console.log(`[pkos-runtime] existing_db ${input.dbExistedAtStartup ?? payload.database.exists}`);
   console.log(`[pkos-runtime] migration_version ${payload.database.schemaVersion}`);
+  console.log(`[pkos-service] version ${payload.service.version}`);
+  console.log(`[pkos-service] api_contract ${payload.service.apiContractVersion}`);
+  console.log(`[pkos-service] build_fingerprint ${payload.service.buildFingerprint}`);
+  console.log(`[pkos-service] source_revision ${payload.service.sourceRevision}`);
+  console.log(`[pkos-service] dirty ${payload.service.dirty}`);
+  console.log(`[pkos-service] capabilities ${payload.service.capabilities.join(",")}`);
+  console.log(`[pkos-service] required_schema ${payload.database.requiredSchemaVersion}`);
+  console.log(`[pkos-service] database_compatible ${payload.database.compatible}`);
 }
 
 function schemaVersion(db: AgentDatabase): number {

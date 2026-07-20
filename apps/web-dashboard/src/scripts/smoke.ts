@@ -320,6 +320,10 @@ assert(reminderCliFailureAttempt.status === "cli_failed", "reminder cli_invalid_
 assert(reminderCliFailureResult?.errorCode === "cli_invalid_json", "reminder safe CLI subcode was not retained for display");
 
 assert(isHealthResponse({ ok: true, service: "pkos-agent-server", mode: "dry-run" }), "health guard failed");
+assert(sourceContains("serviceBuildFingerprint"), "dashboard status does not display service build fingerprint");
+assert(sourceContains("databaseCompatible"), "dashboard status does not display database compatibility");
+assert(sourceContains("Service build"), "dashboard service build label is missing");
+assert(sourceContains("DB compatibility"), "dashboard DB compatibility label is missing");
 assert(
   isActionRequestListResponse({
     ok: true,

@@ -70,6 +70,7 @@ export type {
   ProviderProfilesResponse,
   ProviderProfileSummary,
   ReasoningPreset,
+  ServiceIdentityResponse,
   RuntimeInfoResponse,
   RuntimeReminderNotification,
   RuntimeReminderNotificationFilters,

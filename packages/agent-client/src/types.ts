@@ -8,10 +8,27 @@ export type HealthResponse = {
   mode: string;
   runtimeFingerprint?: string;
   profileName?: string;
+  serviceVersion?: string;
+  serviceBuildFingerprint?: string;
+  apiContractVersion?: string;
+  databaseSchemaVersion?: number;
+  databaseRequiredSchemaVersion?: number;
+  databaseCompatible?: boolean;
+};
+
+export type ServiceIdentityResponse = {
+  name: "pkos-agent-server";
+  version: string;
+  apiContractVersion: string;
+  buildFingerprint: string;
+  sourceRevision: string;
+  dirty: boolean;
+  capabilities: string[];
+  manifestFingerprint: string;
 };
 
 export type RuntimeInfoResponse = {
-  service: "pkos-agent-server";
+  service: ServiceIdentityResponse;
   profileName: string;
   runtimeFingerprint: string;
   dataRoot: {
@@ -21,6 +38,8 @@ export type RuntimeInfoResponse = {
   database: {
     exists: boolean;
     schemaVersion: number;
+    requiredSchemaVersion: number;
+    compatible: boolean;
   };
   process: {
     startedAt: string;

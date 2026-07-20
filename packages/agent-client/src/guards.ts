@@ -59,7 +59,13 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
     typeof value.service === "string" &&
     typeof value.mode === "string" &&
     (value.runtimeFingerprint === undefined || typeof value.runtimeFingerprint === "string") &&
-    (value.profileName === undefined || typeof value.profileName === "string")
+    (value.profileName === undefined || typeof value.profileName === "string") &&
+    (value.serviceVersion === undefined || typeof value.serviceVersion === "string") &&
+    (value.serviceBuildFingerprint === undefined || isShortSha(value.serviceBuildFingerprint)) &&
+    (value.apiContractVersion === undefined || typeof value.apiContractVersion === "string") &&
+    (value.databaseSchemaVersion === undefined || typeof value.databaseSchemaVersion === "number") &&
+    (value.databaseRequiredSchemaVersion === undefined || typeof value.databaseRequiredSchemaVersion === "number") &&
+    (value.databaseCompatible === undefined || typeof value.databaseCompatible === "boolean")
   );
 }
 
@@ -71,7 +77,7 @@ export function isRuntimeInfoResponse(value: unknown): value is RuntimeInfoRespo
     return false;
   }
   return (
-    value.service === "pkos-agent-server" &&
+    isServiceIdentityResponse(value.service) &&
     typeof value.profileName === "string" &&
     typeof value.runtimeFingerprint === "string" &&
     isRecord(value.dataRoot) &&
@@ -79,9 +85,11 @@ export function isRuntimeInfoResponse(value: unknown): value is RuntimeInfoRespo
     typeof value.dataRoot.label === "string" &&
     typeof value.dataRoot.fingerprint === "string" &&
     isRecord(value.database) &&
-    hasOnlyKeys(value.database, ["exists", "schemaVersion"]) &&
+    hasOnlyKeys(value.database, ["exists", "schemaVersion", "requiredSchemaVersion", "compatible"]) &&
     typeof value.database.exists === "boolean" &&
     typeof value.database.schemaVersion === "number" &&
+    typeof value.database.requiredSchemaVersion === "number" &&
+    typeof value.database.compatible === "boolean" &&
     isRecord(value.process) &&
     hasOnlyKeys(value.process, ["startedAt", "pid"]) &&
     typeof value.process.startedAt === "string" &&
@@ -92,6 +100,27 @@ export function isRuntimeInfoResponse(value: unknown): value is RuntimeInfoRespo
     (typeof value.provider.modelId === "string" || value.provider.modelId === null) &&
     typeof value.provider.reasoningPreset === "string" &&
     typeof value.provider.keyConfigured === "boolean"
+  );
+}
+
+function isServiceIdentityResponse(value: unknown): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (!hasOnlyKeys(value, ["name", "version", "apiContractVersion", "buildFingerprint", "sourceRevision", "dirty", "capabilities", "manifestFingerprint"])) {
+    return false;
+  }
+  return (
+    value.name === "pkos-agent-server" &&
+    typeof value.version === "string" &&
+    typeof value.apiContractVersion === "string" &&
+    isShortSha(value.buildFingerprint) &&
+    typeof value.sourceRevision === "string" &&
+    typeof value.dirty === "boolean" &&
+    Array.isArray(value.capabilities) &&
+    value.capabilities.every((capability) => typeof capability === "string" && capability.length > 0) &&
+    new Set(value.capabilities).size === value.capabilities.length &&
+    isShortSha(value.manifestFingerprint)
   );
 }
 
@@ -337,6 +366,10 @@ function isRuntimeReminderNotification(value: unknown): boolean {
 function hasOnlyKeys(value: Record<string, unknown>, allowed: string[]): boolean {
   const allowedSet = new Set(allowed);
   return Object.keys(value).every((key) => allowedSet.has(key));
+}
+
+function isShortSha(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{12,16}$/i.test(value);
 }
 
 function isWritebackResult(value: unknown): value is WritebackResult {

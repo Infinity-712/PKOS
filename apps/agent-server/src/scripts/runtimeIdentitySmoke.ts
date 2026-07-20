@@ -13,15 +13,28 @@ import {
 } from "../runtime/RuntimeIdentity.js";
 
 type RuntimeInfoPayload = {
-  service?: string;
+  service?: {
+    name?: string;
+    version?: string;
+    apiContractVersion?: string;
+    buildFingerprint?: string;
+    capabilities?: string[];
+  };
   profileName?: string;
   runtimeFingerprint?: string;
   dataRoot?: { label?: string; fingerprint?: string };
-  database?: { exists?: boolean; schemaVersion?: number };
+  database?: { exists?: boolean; schemaVersion?: number; requiredSchemaVersion?: number; compatible?: boolean };
   process?: { startedAt?: string; pid?: number };
   provider?: { profileId?: string; modelId?: string; reasoningPreset?: string; keyConfigured?: boolean };
 };
-type HealthPayload = { ok?: boolean; service?: string; runtimeFingerprint?: string; profileName?: string };
+type HealthPayload = {
+  ok?: boolean;
+  service?: string;
+  runtimeFingerprint?: string;
+  profileName?: string;
+  serviceBuildFingerprint?: string;
+  databaseCompatible?: boolean;
+};
 
 const root = mkdtempSync(join(tmpdir(), "pkos-runtime-identity-smoke-"));
 const originalDataRoot = process.env.PKOS_DATA_ROOT;
@@ -71,7 +84,9 @@ try {
     assert(changedProviderPayload.runtimeFingerprint === payload.runtimeFingerprint, "provider selection changed runtime fingerprint");
     assert(payload.dataRoot.label === basename(dataRootA), "runtime-info did not expose data label");
     assert(payload.dataRoot.fingerprint === dataRootFingerprint(dataRootA).slice(0, 16), "runtime-info data fingerprint mismatch");
+    assert(payload.service.name === "pkos-agent-server" && typeof payload.service.buildFingerprint === "string", "runtime-info service identity missing");
     assert(payload.database.exists === true && payload.database.schemaVersion >= 1, "runtime-info database state missing");
+    assert(payload.database.requiredSchemaVersion === 6 && payload.database.compatible === true, "runtime-info database compatibility missing");
     assert(!serialized.includes(coreRoot), "runtime-info leaked absolute coreRoot");
     assert(!serialized.includes(dataRootA), "runtime-info leaked absolute dataRoot");
     assert(!serialized.includes(dbPathA), "runtime-info leaked absolute DB path");
@@ -86,12 +101,15 @@ try {
     }
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const runtimeInfo = (await (await fetch(`${baseUrl}/api/runtime-info`)).json()) as RuntimeInfoPayload;
-    assert(runtimeInfo.service === "pkos-agent-server", "runtime-info route service mismatch");
+    assert(runtimeInfo.service?.name === "pkos-agent-server", "runtime-info route service mismatch");
+    assert(typeof runtimeInfo.service?.buildFingerprint === "string", "runtime-info route service build fingerprint missing");
     assert(typeof runtimeInfo.runtimeFingerprint === "string" && runtimeInfo.runtimeFingerprint.length >= 12, "runtime-info route missing fingerprint");
     assert(!JSON.stringify(runtimeInfo).includes(dataRootA), "runtime-info route leaked absolute paths");
     assert(!JSON.stringify(runtimeInfo).includes("second-secret-value"), "runtime-info route leaked key");
     const health = (await (await fetch(`${baseUrl}/health`)).json()) as HealthPayload;
     assert(health.ok === true && health.runtimeFingerprint === runtimeInfo.runtimeFingerprint, "health did not include lightweight runtime identity");
+    assert(health.serviceBuildFingerprint === runtimeInfo.service?.buildFingerprint, "health build fingerprint mismatch");
+    assert(health.databaseCompatible === true, "health database compatibility missing");
     assert(health.profileName === runtimeInfo.profileName, "health profileName mismatch");
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "0.7-service-identity",
+  "service": {
+    "name": "pkos-agent-server",
+    "version": "0.7-service-identity",
+    "apiContractVersion": "0.7"
+  },
+  "database": {
+    "requiredSchemaVersion": 6
+  },
+  "capabilities": [
+    "health.v1",
+    "runtime-info.v1",
+    "chat.sessions.read",
+    "chat.messages.read",
+    "chat.send.readonly",
+    "provider.status.read",
+    "provider.selection.write",
+    "actions.fixed-writeback",
+    "inbox-review.read",
+    "inbox-review.mark",
+    "state-timeline.read",
+    "task.authority.read",
+    "task.authority.write",
+    "reminder.authority.read",
+    "reminder.authority.write",
+    "reminder.runtime-notifications.read"
+  ]
+}
