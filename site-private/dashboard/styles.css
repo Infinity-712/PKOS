@@ -61,6 +61,17 @@ header h1 { margin: 0; font-size: 1.1rem; color: var(--muted); }
 .hero h1 { margin: 12px 0 4px 0; font-size: 1.45rem; }
 .small { font-size: .9rem; color: var(--muted); }
 
+.legacy-banner {
+  background: color-mix(in srgb, var(--warn) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--line));
+  border-left: 5px solid var(--warn);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin: 12px 0;
+}
+.legacy-banner strong { display: block; margin-bottom: 4px; }
+.legacy-banner p { margin: 0; color: var(--fg); }
+
 .card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -100,6 +111,11 @@ table { width: 100%; border-collapse: collapse; }
 th, td { border-bottom: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }
 th { color: var(--muted); font-weight: 600; }
 .chip { display: inline-block; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; font-size: .78rem; }
+.chip.legacy-disabled {
+  color: var(--muted);
+  background: var(--soft);
+  border-style: dashed;
+}
 
 .create-panel pre, pre {
   white-space: pre-wrap;

@@ -92,40 +92,34 @@ See `docs/SERVICE_IDENTITY_CONTRACT.md`.
    python -m tools.pkos gen-digest --week 2026-W07
    ```
 
-4. 导出私密 dashboard 数据：
-   ```bash
-   python -m tools.pkos export-site-data
-   ```
-   该命令同时写出 `site-private/_pkos/` 与 `runtime/site-private/_pkos/`。
-
-5. 生成 Flow Hub 运行视图：
+4. 生成 Flow Hub 运行视图：
    ```bash
    python -m tools.pkos gen-flow
    ```
 
-6. 导出月洛洛上下文包：
+5. 导出月洛洛上下文包：
    ```bash
    python -m tools.pkos export-agent-context
    ```
 
-7. 追加 Inbox 捕获：
+6. 追加 Inbox 捕获：
    ```bash
    python -m tools.pkos inbox-append --capture-type note --content "..."
    ```
 
-8. 追加当前状态快照：
+7. 追加当前状态快照：
    ```bash
    python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
    ```
 
 `inbox/items.jsonl` 与 `state/snapshots.jsonl` 是 local operational logs，当前默认被 Git 忽略。`runtime/` 仍是 derived cache，可删除并重新生成。
 
-## 本地预览
+## Legacy 静态站预览
 
-默认预览当前仓库权威数据：
+`site-private/dashboard` 是历史只读界面，只能查看 `export-site-data` 生成的派生 JSON。它不再维护，不支持 authority 写回，也不是当前主 GUI。
 
 ```bash
-python -m tools.pkos export-site-data
+python -m tools.pkos export-site-data --profile demo
 python -m http.server 8000
 ```
 
@@ -133,12 +127,7 @@ python -m http.server 8000
 
 - `http://localhost:8000/site-private/dashboard/index.html`
 
-如需预览稳定 demo 数据：
-
-```bash
-python -m tools.pkos export-site-data --profile demo
-python -m http.server 8000
-```
+不要使用 `8000` 对正式 `PKOS_DATA_ROOT` 做人工 Review/SRS 写回。当前主界面由 `scripts/local-runtime.ps1 start` 启动的 Web Dashboard / Desktop 提供。
 
 ## 对象录入规范
 
@@ -162,31 +151,21 @@ python -m http.server 8000
 
 `content` 是推荐的规范正文。旧对象可通过 `definition`、`explanation`、`notes`、`text`、`body` 被 dashboard 兼容预览。
 
-## 复习写回
+## Review/SRS 写回
 
-本地后端提供确定性评分写回：
+当前 Review/SRS authority 写回只能通过主线链路：
 
-```bash
-python -m tools.pkos serve --port 8787
+```text
+Web Dashboard / Desktop -> 127.0.0.1:8790 Agent Server -> Python Core -> PKOS_DATA_ROOT
 ```
 
-请求头：`X-PKOS-Token`，值来自本机环境变量 `PKOS_WRITE_TOKEN`。
+旧 FastAPI `python -m tools.pkos serve --port 8787` 已隔离为 Legacy read-only。旧 `/api/review/ratings:batch` 永久返回 `410 legacy_writeback_disabled`，不会追加 `review/logs/`、不会修改 `object.srs`、不会 Git commit。
 
-示例：
+CLI 人工写回仍可用于验收与恢复：
 
 ```bash
-curl -X POST http://127.0.0.1:8787/api/review/ratings:batch \
-  -H 'Content-Type: application/json' \
-  -H 'X-PKOS-Token: <your-token>' \
-  -d '{"items":[{"id":"fact.demo.due","score":4},{"id":"skill.demo.due","score":3}]}'
+python -m tools.pkos review-rate --object-id fact.demo --rating 4 --reviewed-at "2026-07-20T00:00:00Z" --actor human --request-id "review-demo-1" --json
 ```
-
-写回结果：
-
-- `review/logs/YYYY-MM-DD.jsonl` 追加日志；
-- 对应对象 `srs` 字段更新；
-- 自动产生一次 Git commit；
-- 返回 commit hash、changed files 与 failures。
 
 ## 回滚
 
@@ -246,3 +225,4 @@ integrations/moonlolo/pkos_client.mjs
 - `403 localhost only`：请求未从本机回环地址进入。
 - `404 object not found`：对象 id 不存在。
 - `type not writable: creative`：creative 不参与默认 SRS 写回。
+- `410 legacy_writeback_disabled`：调用了已隔离的旧 FastAPI 写接口；请改用 `8790` Agent Server 或当前 Python Review CLI。

@@ -1,21 +1,21 @@
 const PKOS_DATA_BASE = new URLSearchParams(location.search).get('data') || '../_pkos';
 const LANG_KEY = 'pkos-lang';
 const THEME_KEY = 'pkos-theme';
-const RATINGS_KEY = 'pkos-review-ratings';
 const PREVIEW_FIELDS = ['content', 'definition', 'explanation', 'notes', 'text', 'body', 'summary'];
 
 const DIAG = { base: PKOS_DATA_BASE, resources: [] };
 const STATE = {
   lang: 'zh',
   theme: 'light',
-  ratings: {},
   previewCache: new Map(),
 };
 
 const I18N = {
   zh: {
     navOverview: '总览', navObjects: '对象', navReview: '复习', navDigests: '周报',
-    heroHint: '只读 GUI：仅生成可复制片段，不会直接写回权威文件。',
+    heroHint: 'Legacy PKOS Dashboard / 历史只读界面：旧静态站已隔离，仅用于查看派生数据。',
+    legacyBannerTitle: 'Legacy PKOS Dashboard / 历史只读界面',
+    legacyBannerBody: '不再维护；authority 写回已禁用。当前主界面是 Web Dashboard，权威写回只能经 8790 Agent Server。',
     diagnostics: '诊断信息', resourceUpdates: '每次加载后会更新资源状态。',
     dataLoadFailed: '数据加载失败', page: '页面', failedUrl: '失败地址', error: '错误',
     tryRun: '可尝试运行：', thenServe: '然后在仓库根目录启动：',
@@ -23,20 +23,14 @@ const I18N = {
     indexTitle: 'PKOS 私有看板', objectsTitle: '对象清单', reviewTitle: '复习队列', digestsTitle: '周报索引',
     byType: '按类型', byStatus: '按状态',
     filterType: '类型', filterStatus: '状态', filterTags: '标签', all: '全部', apply: '应用筛选',
-    createPanelTitle: 'Create（仅复制/下载）', createHint: '仅生成模板文本，不会写入仓库。',
-    generate: '生成', copy: '复制', download: '下载',
+    createPanelTitle: '历史模板参考（仅查看/复制）', createHint: '旧静态站不创建对象；模板仅作格式参考，正式创建将在当前 Web Dashboard/Object Authority 中完成。',
+    generate: '查看模板', copy: '复制参考', download: '下载参考',
     noMatched: '无匹配对象', noQueue: '暂无队列项',
     id: 'ID', type: '类型', status: '状态', title: '标题', tags: '标签', path: '路径',
-    dueAt: '到期时间', score: '评分', actions: '操作', preview: '预览',
+    dueAt: '到期时间', score: '旧评分入口', actions: '操作', preview: '预览',
     daily: 'Daily（事实+技能）', weekly: 'Weekly（主张）',
-    reviewReadonly: '只读：评分只生成命令/日志片段，请在 VS Code/CLI 手动执行写回。',
-    builderTitle: '命令生成器（聚合）', builderHint: '单一可复制输出；同对象重复评分会覆盖旧值。',
-    copyAll: '一键复制', clear: '清空',
-    commandDraft: '# TODO: 待后续 CLI 支持\npkos review-log append --batch-jsonl <<\'JSONL\'',
-    commandEnd: 'JSONL',
-    logSnippet: '# 日志片段（可粘贴）',
-    noRatingsYet: '尚未评分，点击上方 1~5 分按钮开始聚合。',
-    joinedQueue: '已加入评分队列', ratingUpdated: '已更新评分（覆盖旧值）',
+    reviewReadonly: '历史只读队列：旧评分写回已禁用。请使用当前 Web Dashboard 的 Review 页面进行人工评分。',
+    legacyScoreDisabled: '已禁用',
     copied: '已复制到剪贴板', copyFailed: '复制失败，请手动复制',
     cleared: '已清空评分聚合器',
     previewLoadFailed: '预览加载失败：未找到对象正文，已回退摘要。',
@@ -50,7 +44,9 @@ const I18N = {
   },
   en: {
     navOverview: 'Overview', navObjects: 'Objects', navReview: 'Review', navDigests: 'Digests',
-    heroHint: 'Read-only GUI: generate copyable snippets only; no direct writes to authority files.',
+    heroHint: 'Legacy PKOS Dashboard / 历史只读界面: old static site is quarantined and only inspects derived data.',
+    legacyBannerTitle: 'Legacy PKOS Dashboard / 历史只读界面',
+    legacyBannerBody: 'No longer maintained; authority 写回已禁用. The current main UI is Web Dashboard, and authority writes must go through the 8790 Agent Server.',
     diagnostics: 'Diagnostics', resourceUpdates: 'Resource status updates appear after each load.',
     dataLoadFailed: 'Data load failed', page: 'Page', failedUrl: 'Failed URL', error: 'Error',
     tryRun: 'Try running:', thenServe: 'Then serve from repository root:',
@@ -58,20 +54,14 @@ const I18N = {
     indexTitle: 'PKOS Private Dashboard', objectsTitle: 'Objects', reviewTitle: 'Review Queues', digestsTitle: 'Digests',
     byType: 'By Type', byStatus: 'By Status',
     filterType: 'Type', filterStatus: 'Status', filterTags: 'Tags', all: 'all', apply: 'Apply',
-    createPanelTitle: 'Create (copy/download only)', createHint: 'Generates template text only; does not write repository files.',
-    generate: 'Generate', copy: 'Copy', download: 'Download',
+    createPanelTitle: 'Legacy template reference (view/copy only)', createHint: 'The legacy static site does not create objects. Templates are format references; current object creation belongs in Web Dashboard/Object Authority.',
+    generate: 'View template', copy: 'Copy reference', download: 'Download reference',
     noMatched: 'No matched objects', noQueue: 'No queue items',
     id: 'id', type: 'type', status: 'status', title: 'title', tags: 'tags', path: 'path',
-    dueAt: 'due_at', score: 'score', actions: 'actions', preview: 'Preview',
+    dueAt: 'due_at', score: 'legacy rating', actions: 'actions', preview: 'Preview',
     daily: 'Daily (Fact + Skill)', weekly: 'Weekly (Claim)',
-    reviewReadonly: 'Read-only: scores only generate command/log snippets. Execute writes in VS Code/CLI manually.',
-    builderTitle: 'Command Builder (aggregated)', builderHint: 'Single copyable output; rescoring the same object overwrites previous value.',
-    copyAll: 'Copy All', clear: 'Clear',
-    commandDraft: '# TODO: wait for future CLI support\npkos review-log append --batch-jsonl <<\'JSONL\'',
-    commandEnd: 'JSONL',
-    logSnippet: '# Log snippet (paste-ready)',
-    noRatingsYet: 'No ratings yet. Click 1~5 score buttons above to aggregate.',
-    joinedQueue: 'Added to rating queue', ratingUpdated: 'Rating updated (previous value overwritten)',
+    reviewReadonly: 'Legacy read-only queue: old rating writeback is disabled. Use the current Web Dashboard Review page for human ratings.',
+    legacyScoreDisabled: 'disabled',
     copied: 'Copied to clipboard', copyFailed: 'Copy failed, please copy manually',
     cleared: 'Rating aggregator cleared',
     previewLoadFailed: 'Preview failed: no body found; fallback summary shown.',
@@ -110,12 +100,6 @@ function initTheme(){
   document.documentElement.dataset.theme = STATE.theme;
 }
 
-function loadRatings(){
-  try{ STATE.ratings = JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}') || {}; }
-  catch{ STATE.ratings = {}; }
-}
-function persistRatings(){ localStorage.setItem(RATINGS_KEY, JSON.stringify(STATE.ratings)); }
-
 function nav(){
   return `<nav class="top-nav">
     <a href="index.html">${esc(t('navOverview'))}</a>
@@ -131,6 +115,7 @@ function nav(){
 
 function shell(title){
   return `${nav()}<section class="hero"><h1>${esc(title)}</h1><p class="small">${esc(t('heroHint'))}</p></section>
+  <section class="legacy-banner" role="note"><strong>${esc(t('legacyBannerTitle'))}</strong><p>${esc(t('legacyBannerBody'))}</p></section>
   <div id="alerts"></div><div id="content"></div>${diagnosticsPanel()}
   <div id="toastContainer" class="toast-container" aria-live="polite"></div>
   <dialog id="previewModal" class="modal"></dialog>`;
@@ -410,35 +395,6 @@ async function openPreview(item){
 }
 
 
-function renderBuilder(){
-  const ids = Object.keys(STATE.ratings).sort();
-  const box = document.getElementById('builderOutput');
-  if(!box) return;
-  if(!ids.length){ box.textContent = t('noRatingsYet'); return; }
-  const lines = ids.map(id => JSON.stringify({ id, score: STATE.ratings[id].score, ts: STATE.ratings[id].updated_at }));
-  const command = [t('commandDraft'), ...lines, t('commandEnd'), '', t('logSnippet'), ...lines].join('\n');
-  box.textContent = command;
-}
-
-function setRating(item, score){
-  const existed = Boolean(STATE.ratings[item.id]);
-  STATE.ratings[item.id] = {
-    score,
-    path: item.path,
-    title: item.title,
-    due_at: item.due_at,
-    updated_at: new Date().toISOString(),
-  };
-  persistRatings();
-  renderBuilder();
-  toast(`${existed ? t('ratingUpdated') : t('joinedQueue')}: ${item.id} = ${score}`, 'success');
-}
-
-function scoreButtons(item){
-  const selected = STATE.ratings[item.id]?.score;
-  return [1,2,3,4,5].map(n=>`<button class="score ${selected===n?'selected':''}" data-id="${esc(item.id)}" data-score="${n}" aria-label="score ${n}">${n}</button>`).join('');
-}
-
 async function pageIndex(){
   setHeaderTitle(t('indexTitle'));
   document.getElementById('app').innerHTML = shell(t('indexTitle'));
@@ -500,7 +456,7 @@ async function pageObjects(){
 
 function toReviewRows(arr){
   return arr.map(x=>`<tr data-id="${esc(x.id)}"><td>${esc(x.id)}</td><td>${esc(x.title)}</td><td>${esc(x.due_at)}</td><td class="small">${esc(x.path)}</td>
-    <td><div class="scores">${scoreButtons(x)}</div></td><td><button class="preview-btn" data-preview="${esc(x.id)}">${esc(t('preview'))}</button></td></tr>`).join('') || `<tr><td colspan="6">${esc(t('noQueue'))}</td></tr>`;
+    <td><span class="chip legacy-disabled">${esc(t('legacyScoreDisabled'))}</span></td><td><button class="preview-btn" data-preview="${esc(x.id)}">${esc(t('preview'))}</button></td></tr>`).join('') || `<tr><td colspan="6">${esc(t('noQueue'))}</td></tr>`;
 }
 
 async function pageReview(){
@@ -508,7 +464,6 @@ async function pageReview(){
   document.getElementById('app').innerHTML = shell(t('reviewTitle'));
   wireGlobalToggles();
   pageEnter();
-  loadRatings();
   try{
     const [data, indexRows] = await Promise.all([loadJSON('queues.json'), loadJSON('index.json')]);
     const indexById = Object.fromEntries((indexRows||[]).map(i=>[i.id, i]));
@@ -516,22 +471,7 @@ async function pageReview(){
     const byId = Object.fromEntries(items.map(i=>[i.id, i]));
     document.getElementById('content').innerHTML = `<div class="card warn">${esc(t('reviewReadonly'))}</div>
     <div class="card"><h3>${esc(t('daily'))}</h3><table><thead><tr><th>${esc(t('id'))}</th><th>${esc(t('title'))}</th><th>${esc(t('dueAt'))}</th><th>${esc(t('path'))}</th><th>${esc(t('score'))}</th><th>${esc(t('actions'))}</th></tr></thead><tbody>${toReviewRows(data.daily||[])}</tbody></table></div>
-    <div class="card"><h3>${esc(t('weekly'))}</h3><table><thead><tr><th>${esc(t('id'))}</th><th>${esc(t('title'))}</th><th>${esc(t('dueAt'))}</th><th>${esc(t('path'))}</th><th>${esc(t('score'))}</th><th>${esc(t('actions'))}</th></tr></thead><tbody>${toReviewRows(data.weekly||[])}</tbody></table></div>
-    <div class="card"><h3>${esc(t('builderTitle'))}</h3><p class="small">${esc(t('builderHint'))}</p>
-      <div class="row"><button id="copyAll">${esc(t('copyAll'))}</button><button id="clearAll">${esc(t('clear'))}</button></div>
-      <pre id="builderOutput" class="small"></pre>
-    </div>`;
-
-    document.querySelectorAll('.score').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        const row = btn.closest('tr');
-        const id = row?.dataset.id;
-        const item = byId[id];
-        if(!item) return;
-        setRating(item, Number(btn.dataset.score));
-        row.querySelectorAll('.score').forEach(b=>b.classList.toggle('selected', b===btn));
-      });
-    });
+    <div class="card"><h3>${esc(t('weekly'))}</h3><table><thead><tr><th>${esc(t('id'))}</th><th>${esc(t('title'))}</th><th>${esc(t('dueAt'))}</th><th>${esc(t('path'))}</th><th>${esc(t('score'))}</th><th>${esc(t('actions'))}</th></tr></thead><tbody>${toReviewRows(data.weekly||[])}</tbody></table></div>`;
 
     document.querySelectorAll('.preview-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{
@@ -541,13 +481,6 @@ async function pageReview(){
       });
     });
 
-    document.getElementById('copyAll').onclick = async ()=>{
-      try{ await navigator.clipboard.writeText(document.getElementById('builderOutput').textContent || ''); toast(t('copied'),'success'); }
-      catch{ toast(t('copyFailed'),'error'); }
-    };
-    document.getElementById('clearAll').onclick = ()=>{ STATE.ratings = {}; persistRatings(); renderBuilder(); toast(t('cleared'),'info'); document.querySelectorAll('.score.selected').forEach(x=>x.classList.remove('selected')); };
-
-    renderBuilder();
   }catch(detail){ renderLoadError('review', detail); }
 }
 

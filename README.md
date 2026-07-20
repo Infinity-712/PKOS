@@ -94,13 +94,13 @@ pkos-vault  # private: objects, inbox, state, review logs, digests, runtime
    - 汇总知识对象增量与运行回顾。
    - 每条关键结论必须保留 references。
 
-5. **site-private**
-   - 本地 dashboard，用于浏览 objects、queues、digests 与 review。
-   - 前端只作为私密操作台，不直接写权威文件。
+5. **Web Dashboard / Desktop**
+   - 当前主界面由 `apps/web-dashboard` 与 `apps/desktop` 提供。
+   - GUI authority 写回只能通过 `127.0.0.1:8790` Agent Server 的固定 API，再进入 Python Core。
 
-6. **local backend**
-   - FastAPI 本地后端默认监听 `127.0.0.1`。
-   - 写接口必须 token + localhost + 白名单 + auto commit。
+6. **legacy static/FastAPI**
+   - `site-private/dashboard`、`python -m http.server 8000` 与 `python -m tools.pkos serve --port 8787` 已隔离为 legacy read-only。
+   - 旧 FastAPI 不支持 DeepSeek，不允许 authority 写回。
 
 7. **Flow Hub / runtime**
    - 预留 Inbox、Current State、Today Queue、Recovery Queue、Writing Queue、Agent Context Pack 等运行中枢能力。
@@ -117,7 +117,6 @@ python -m tools.pkos state-append --energy low --mood anxious --body chest_tight
 python -m tools.pkos state-list --json
 python -m tools.pkos gen-flow
 python -m tools.pkos export-agent-context
-python -m tools.pkos export-site-data
 python -m tools.pkos task-create --title "..." --source manual --request-id "..."
 python -m tools.pkos task-list --json
 python -m tools.pkos task-transition --task-id task_... --target-status in_progress --reason "..."
@@ -184,10 +183,14 @@ PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos gen-flow
 PKOS_DATA_ROOT=/home/infinity/data/pkos-vault python -m tools.pkos export-agent-context
 ```
 
-## 本地预览
+## Legacy 静态站
+
+`site-private/dashboard` 是历史只读界面，仅用于检查派生 `_pkos/*.json` 导出数据。它不再维护，不支持 authority 写回，不是当前推荐 GUI。
+
+Legacy preview only:
 
 ```bash
-python -m tools.pkos export-site-data
+python -m tools.pkos export-site-data --profile demo
 python -m http.server 8000
 ```
 
@@ -195,12 +198,7 @@ python -m http.server 8000
 
 - `http://localhost:8000/site-private/dashboard/index.html`
 
-如需查看随仓库提供的稳定 demo 数据：
-
-```bash
-python -m tools.pkos export-site-data --profile demo
-python -m http.server 8000
-```
+不要把 `8000` 连接到正式 `PKOS_DATA_ROOT` 做人工写回；当前主界面请使用 `scripts/local-runtime.ps1 start` 启动的 Web Dashboard / Desktop。
 
 ## Reminder v0.7-beta
 
@@ -232,6 +230,12 @@ writing material. Human ratings use the fixed 1..5 mapping: Again, Hard, Good,
 Easy, Perfect. Agent/LLM code must not grade mastery.
 
 See `docs/REVIEW_SRS_CONTRACT.md`.
+
+## Legacy FastAPI Quarantine
+
+`python -m tools.pkos serve --port 8787` 只保留为历史只读 FastAPI。旧 `/api/chat` 与旧 `/api/review/ratings:batch` 均返回 `410 Gone`。DeepSeek、Chat、Review/SRS authority 写回只属于当前 `pkos-agent-server` on `127.0.0.1:8790`。
+
+See `docs/LEGACY_SERVICE_QUARANTINE.md`.
 
 ## Moonlolo Bridge CLI
 
@@ -272,7 +276,7 @@ See `docs/SERVER_DEPLOYMENT.md` for Ubuntu 22.04 deployment notes.
 
 ## 注意事项
 
-- Dashboard 当前仍是只读视图；Review 评分可生成聚合片段，权威写回应通过后端确定性接口。
+- Legacy static dashboard 当前仅用于只读检查派生数据；Review 评分入口已禁用。
 - `creative` 保留为内部对象类型，生命周期建议为 `draft / revised / archived`。
 - RAG、前端导出、Agent Context Pack 都是派生缓存，不是权威层。
 - `runtime/flow/` 与 `runtime/agent_context.json` 可删除并重新生成。

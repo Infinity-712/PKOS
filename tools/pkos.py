@@ -670,8 +670,8 @@ def main() -> int:
     state_parser.add_argument("--state-path", default="state/snapshots.jsonl")
     state_parser.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
 
-    serve_parser = subparsers.add_parser("serve", help="Run local backend API")
-    serve_parser.add_argument("--port", type=int, default=8787, help="Server port (localhost only)")
+    serve_parser = subparsers.add_parser("serve", help="Run legacy local backend API [legacy read-only]")
+    serve_parser.add_argument("--port", type=int, default=8787, help="Legacy read-only server port (localhost only)")
 
     export_parser = subparsers.add_parser("export-site-data", help="Export static-site data")
     export_parser.add_argument(

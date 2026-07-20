@@ -1,13 +1,15 @@
 # PKOS Project Plan
 
+> Legacy note: v0.3 `site-private/dashboard` and v0.4 FastAPI are historical milestones. They are now quarantined as legacy read-only components. Current GUI authority writes must go through `pkos-agent-server` on port `8790`; see `docs/LEGACY_SERVICE_QUARANTINE.md`.
+
 PKOS 当前定位为私密个人知识与能动性操作系统。主线目标是维护一个 Git 可审计、可回滚、可复习、可压缩的个人知识与行动层。
 
 ## 当前边界
 
 - 权威层：仓库内 Markdown / YAML / JSON / JSONL。
 - 派生层：dashboard 数据、Digest、RAG index、Agent Context Pack。
-- 前端：`site-private` 本地 dashboard。
-- 后端：localhost-only FastAPI。
+- 前端：当前主线为 `apps/web-dashboard` 与 `apps/desktop`；`site-private/dashboard` 为 legacy read-only。
+- 后端：当前主线为 `pkos-agent-server` on `127.0.0.1:8790`；旧 FastAPI 为 legacy read-only。
 - Agent：协作者与执行辅助，不拥有权威裁决权。
 
 当前阶段不建设公开内容链路；creative 类型只作为内部创作对象。
@@ -57,20 +59,17 @@ draft -> revised -> archived
 
 - `python -m tools.pkos gen-digest`；
 - Digest references 可追溯；
-- `python -m tools.pkos export-site-data`；
-- `site-private/dashboard` 本地 dashboard；
+- `python -m tools.pkos export-site-data` legacy static export；
+- `site-private/dashboard` legacy 本地 dashboard；
 - objects / queues / digests / review 的静态浏览。
 
 ### v0.4 Local Backend MVP
 
-- FastAPI 本地后端；
+- FastAPI 本地后端（现已隔离为 legacy read-only）；
 - `127.0.0.1` 默认监听；
 - objects / rendered / queues / digests 只读 API；
-- `ratings:batch` 确定性写回；
-- append-only review log；
-- SRS 更新；
-- auto commit；
-- token + localhost 最小保护。
+- 旧 `ratings:batch` 写回已退役并返回 `410 legacy_writeback_disabled`；
+- 旧 chat placeholder 已退役并返回 `410 legacy_chat_retired`。
 
 ## 下一阶段方向
 
@@ -125,17 +124,18 @@ RAG Sidecar 是可删除、可重建的派生检索层：
 python -m tools.pkos validate
 python -m tools.pkos gen-queue
 python -m tools.pkos gen-digest --week 2026-W07
+python -m tools.pkos gen-flow
+python -m tools.pkos export-agent-context
+```
+
+## Legacy 命令
+
+```bash
 python -m tools.pkos export-site-data
 python -m tools.pkos serve --port 8787
 ```
 
-## 计划命令
-
-```bash
-python -m tools.pkos export-agent-context
-python -m tools.pkos export-index
-python -m tools.pkos gen-flow
-```
+These legacy commands are for historical read-only inspection only.
 
 ## 验收原则
 
