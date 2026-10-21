@@ -13,6 +13,16 @@ import type {
   RuntimeInfoResponse,
   RuntimeReminderNotificationsResponse,
   JsonObject,
+  ObjectDeletePreflight,
+  ObjectDetailResponse,
+  ObjectIdContract,
+  ObjectKind,
+  ObjectListItem,
+  ObjectListResponse,
+  ObjectRenderSection,
+  ObjectRenderView,
+  ObjectTypeContract,
+  ObjectTypeContractResponse,
   ProviderProfilesResponse,
   ProviderStatusResponse,
   ReasoningPreset,
@@ -246,6 +256,102 @@ export function isRuntimeReminderNotificationsResponse(value: unknown): value is
   );
 }
 
+export function isObjectTypeContractResponse(value: unknown): value is ObjectTypeContractResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.schemaVersion === "string" &&
+    Array.isArray(value.types) &&
+    value.types.every(isObjectTypeContract)
+  );
+}
+
+export function isObjectListResponse(value: unknown): value is ObjectListResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.schemaVersion === "string" &&
+    typeof value.generatedAt === "string" &&
+    typeof value.count === "number" &&
+    typeof value.totalCount === "number" &&
+    isRecord(value.filters) &&
+    Array.isArray(value.items) &&
+    value.items.every(isObjectListItem) &&
+    isRecord(value.source) &&
+    typeof value.dataRootFingerprint === "string"
+  );
+}
+
+export function isObjectDetailResponse(value: unknown): value is ObjectDetailResponse {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.schemaVersion === "string" &&
+    isRecord(value.object) &&
+    !hasSecretLikeKey(value.object) &&
+    typeof value.location === "string" &&
+    isSafeRelativeLocation(value.location) &&
+    isSha256(value.fileRevisionSha256) &&
+    isSha256(value.objectContentSha256) &&
+    typeof value.srsEligible === "boolean" &&
+    typeof value.contentChangedSinceLastReview === "boolean" &&
+    (value.reviewSummary === null || isRecord(value.reviewSummary)) &&
+    stringArray(value.editableFields) &&
+    stringArray(value.immutableFields) &&
+    stringArray(value.additionalFields) &&
+    typeof value.dataRootFingerprint === "string"
+  );
+}
+
+export function isObjectRenderView(value: unknown): value is ObjectRenderView {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.schemaVersion === "string" &&
+    typeof value.objectId === "string" &&
+    isObjectKind(value.objectType) &&
+    isSha256(value.fileRevisionSha256) &&
+    typeof value.dataRootFingerprint === "string" &&
+    typeof value.body === "string" &&
+    Array.isArray(value.sections) &&
+    value.sections.every(isObjectRenderSection) &&
+    isRecord(value.metadata) &&
+    isSha256(value.objectContentSha256)
+  );
+}
+
+export function isObjectDeletePreflight(value: unknown): value is ObjectDeletePreflight {
+  return (
+    isRecord(value) &&
+    value.ok === true &&
+    typeof value.schemaVersion === "string" &&
+    typeof value.objectId === "string" &&
+    isObjectKind(value.objectType) &&
+    isSha256(value.fileRevisionSha256) &&
+    isSha256(value.objectContentSha256) &&
+    typeof value.reviewEventCount === "number" &&
+    Array.isArray(value.objectReferences) &&
+    value.objectReferences.every(isRecord) &&
+    Array.isArray(value.publishReferences) &&
+    value.publishReferences.every(isRecord) &&
+    Array.isArray(value.taskReferences) &&
+    value.taskReferences.every(isRecord) &&
+    Array.isArray(value.reminderReferences) &&
+    value.reminderReferences.every(isRecord) &&
+    Array.isArray(value.digestReferences) &&
+    value.digestReferences.every(isRecord) &&
+    typeof value.tombstoneExists === "boolean" &&
+    Array.isArray(value.blockers) &&
+    value.blockers.every(isRecord) &&
+    Array.isArray(value.warnings) &&
+    value.warnings.every(isRecord) &&
+    Array.isArray(value.referenceCoverage) &&
+    value.referenceCoverage.every(isRecord) &&
+    typeof value.canDelete === "boolean" &&
+    typeof value.dataRootFingerprint === "string"
+  );
+}
+
 export function isApiErrorPayload(value: unknown): value is ApiErrorPayload {
   return isRecord(value) && typeof value.code === "string" && typeof value.message === "string";
 }
@@ -363,6 +469,76 @@ function isRuntimeReminderNotification(value: unknown): boolean {
   );
 }
 
+function isObjectTypeContract(value: unknown): value is ObjectTypeContract {
+  return (
+    isRecord(value) &&
+    isObjectKind(value.type) &&
+    stringArray(value.editableFields) &&
+    stringArray(value.requiredFields) &&
+    stringArray(value.statusEnum) &&
+    isRecord(value.fieldTypes) &&
+    typeof value.srsEligible === "boolean" &&
+    stringArray(value.immutableFields) &&
+    stringArray(value.supportedSupplementarySections) &&
+    isObjectIdContract(value.objectId)
+  );
+}
+
+function isObjectIdContract(value: unknown): value is ObjectIdContract {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["minLength", "maxLength", "pattern", "humanReadablePattern", "example", "prefixRequirement"])) {
+    return false;
+  }
+  if (typeof value.minLength !== "number" || typeof value.maxLength !== "number") {
+    return false;
+  }
+  return (
+    Number.isInteger(value.minLength) &&
+    Number.isInteger(value.maxLength) &&
+    value.minLength >= 1 &&
+    value.maxLength >= value.minLength &&
+    value.maxLength <= 256 &&
+    typeof value.pattern === "string" &&
+    value.pattern.length > 0 &&
+    typeof value.humanReadablePattern === "string" &&
+    value.humanReadablePattern.length > 0 &&
+    typeof value.example === "string" &&
+    isSafeObjectIdExample(value.example) &&
+    value.prefixRequirement === "must_start_with_type_dot"
+  );
+}
+
+function isObjectListItem(value: unknown): value is ObjectListItem {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    isObjectKind(value.type) &&
+    typeof value.status === "string" &&
+    typeof value.title === "string" &&
+    typeof value.summary === "string" &&
+    typeof value.updatedAt === "string" &&
+    isSha256(value.fileRevisionSha256) &&
+    isSha256(value.objectContentSha256) &&
+    typeof value.srsEligible === "boolean" &&
+    typeof value.contentChangedSinceLastReview === "boolean" &&
+    typeof value.location === "string" &&
+    isSafeRelativeLocation(value.location)
+  );
+}
+
+function isObjectRenderSection(value: unknown): value is ObjectRenderSection {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.title === "string" &&
+    (value.kind === "list" || value.kind === "object" || value.kind === "text") &&
+    Array.isArray(value.items)
+  );
+}
+
+function isObjectKind(value: unknown): value is ObjectKind {
+  return value === "fact" || value === "claim" || value === "skill" || value === "creative";
+}
+
 function hasOnlyKeys(value: Record<string, unknown>, allowed: string[]): boolean {
   const allowedSet = new Set(allowed);
   return Object.keys(value).every((key) => allowedSet.has(key));
@@ -370,6 +546,47 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: string[]): boolean
 
 function isShortSha(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{12,16}$/i.test(value);
+}
+
+function isSha256(value: unknown): value is string {
+  return typeof value === "string" && /^[0-9a-f]{64}$/i.test(value);
+}
+
+function stringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isSafeRelativeLocation(value: string): boolean {
+  return !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value) && !value.startsWith("/") && !value.startsWith("\\") && !value.includes("..") && !value.includes("\\");
+}
+
+function isSafeObjectIdExample(value: string): boolean {
+  return (
+    value.length > 0 &&
+    !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value) &&
+    !value.startsWith("/") &&
+    !value.startsWith("\\") &&
+    !value.includes("/") &&
+    !value.includes("\\") &&
+    !value.includes("..") &&
+    !/\s/.test(value)
+  );
+}
+
+function hasSecretLikeKey(value: Record<string, unknown>): boolean {
+  for (const [key, child] of Object.entries(value)) {
+    const lower = key.toLowerCase();
+    if (lower.includes("secret") || lower.includes("apikey") || lower.includes("api_key") || lower.includes("token")) {
+      return true;
+    }
+    if (isRecord(child) && hasSecretLikeKey(child)) {
+      return true;
+    }
+    if (Array.isArray(child) && child.some((item) => isRecord(item) && hasSecretLikeKey(item))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isWritebackResult(value: unknown): value is WritebackResult {
@@ -380,6 +597,17 @@ function isWritebackResult(value: unknown): value is WritebackResult {
     (value.message === undefined || typeof value.message === "string") &&
     (value.errorCode === undefined || typeof value.errorCode === "string") &&
     (value.target === undefined || typeof value.target === "string") &&
-    (value.recordId === undefined || typeof value.recordId === "string")
+    (value.recordId === undefined || typeof value.recordId === "string") &&
+    (value.reviewBatch === undefined || isReviewBatchOutcome(value.reviewBatch))
   );
+}
+
+function isReviewBatchOutcome(value: unknown): boolean {
+  const reference = (item: unknown): item is string => typeof item === "string" && item.length > 0 && item.length <= 256;
+  return isRecord(value) && hasOnlyKeys(value, ["items", "failures"]) &&
+    Array.isArray(value.items) && Array.isArray(value.failures) && value.items.length + value.failures.length <= 100 &&
+    value.items.every((item) => isRecord(item) && hasOnlyKeys(item, ["objectId", "requestId", "status", "eventId"]) &&
+      reference(item.objectId) && reference(item.requestId) && reference(item.eventId) && (item.status === "written" || item.status === "replayed")) &&
+    value.failures.every((item) => isRecord(item) && hasOnlyKeys(item, ["objectId", "requestId", "code"]) &&
+      reference(item.objectId) && reference(item.requestId) && reference(item.code));
 }

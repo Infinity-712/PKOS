@@ -26,6 +26,7 @@
     "reminder.authority.write",
     "reminder.runtime-notifications.read",
     "review-srs.authority.read",
-    "review-srs.authority.write"
+    "review-srs.authority.write",
+    "object-authority-v1"
   ]
 }

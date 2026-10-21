@@ -135,6 +135,8 @@ def _init_data_git(data_root: Path) -> None:
     subprocess.run(["git", "init"], cwd=data_root, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     subprocess.run(["git", "config", "user.email", "pkos-test@example.invalid"], cwd=data_root, check=True)
     subprocess.run(["git", "config", "user.name", "PKOS Test"], cwd=data_root, check=True)
+    subprocess.run(["git", "config", "gc.auto", "0"], cwd=data_root, check=True)
+    (data_root / ".gitignore").write_text("/runtime/\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=data_root, check=True)
     subprocess.run(["git", "commit", "-m", "seed"], cwd=data_root, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
@@ -158,6 +160,7 @@ def main() -> int:
         _write_object(data_root, "fact", "fact.changed", content="first content")
         _write_object(data_root, "fact", "fact.correct")
         _write_object(data_root, "fact", "fact.legacy.row")
+        _init_data_git(data_root)
 
         rebuild = _json(
             _run(["review-rebuild", "--now", "2026-07-20T00:00:00Z", "--json"], data_root),
@@ -457,6 +460,9 @@ def main() -> int:
         legacy_row = {"id": "fact.legacy.row", "score": 3, "ts": "2026-07-19T00:00:00Z", "source": "api/ratings:batch", "version": "v0.4"}
         with (legacy_log_dir / "2026-07-19.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(legacy_row, ensure_ascii=False) + "\n")
+        subprocess.run(["git", "add", "--", "review/logs/2026-07-19.jsonl"], cwd=data_root, check=True)
+        subprocess.run(["git", "commit", "-m", "seed legacy review fixture"], cwd=data_root,
+                       check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         legacy_view = _json(_run(["review-rebuild", "--now", "2026-07-20T00:00:00Z", "--json"], data_root), "legacy rebuild")
         legacy_item = next(item for item in legacy_view["items"] if item["objectId"] == "fact.legacy.row")
         if legacy_item.get("legacyWarning") != "legacy_unverified":
@@ -536,6 +542,9 @@ def main() -> int:
         )
         if git_rate.get("gitCommitCreated") is not True or not git_rate.get("commitHash"):
             print("FAIL: data root git commit was not created")
+            return 1
+        if any(path.startswith("runtime/") for path in git_rate.get("changedFiles", [])):
+            print("FAIL: review authority commit included runtime caches")
             return 1
         if _git_head(ROOT) != core_head_before:
             print("FAIL: core repository HEAD changed during data root review write")

@@ -7,6 +7,11 @@ import {
   isChatSessionListResponse,
   isCreateChatSessionResponse,
   isHealthResponse,
+  isObjectDeletePreflight,
+  isObjectDetailResponse,
+  isObjectListResponse,
+  isObjectRenderView,
+  isObjectTypeContractResponse,
   isProviderStatusResponse,
   isProviderProfilesResponse,
   isRecord,
@@ -27,6 +32,16 @@ import type {
   HealthResponse,
   InboxAppendRequest,
   JsonObject,
+  ObjectCreateRequest,
+  ObjectDeletePreflight,
+  ObjectDeletePreflightRequest,
+  ObjectDeleteRequest,
+  ObjectDetailResponse,
+  ObjectListFilters,
+  ObjectListResponse,
+  ObjectRenderView,
+  ObjectTypeContractResponse,
+  ObjectUpdateRequest,
   ProviderStatusResponse,
   ProviderProfilesResponse,
   RuntimeInfoResponse,
@@ -47,6 +62,8 @@ export class AgentApiClientError extends Error {
     readonly status: number,
     readonly code: string,
     message: string,
+    readonly requestId?: string,
+    readonly details?: unknown,
   ) {
     super(message);
     this.name = "AgentApiClientError";
@@ -161,6 +178,52 @@ export class AgentApiClient {
     return this.post(`/api/chat/generations/${encodeURIComponent(generationId)}/abort`, {}, isAbortGenerationResponse, signal);
   }
 
+  getObjectTypes(signal?: AbortSignal): Promise<ObjectTypeContractResponse> {
+    return this.get("/api/pkos/object-types", isObjectTypeContractResponse, signal);
+  }
+
+  listObjects(filters: ObjectListFilters = {}, signal?: AbortSignal): Promise<ObjectListResponse> {
+    const params = new URLSearchParams();
+    if (filters.type) {
+      params.set("type", filters.type);
+    }
+    if (filters.status) {
+      params.set("status", filters.status);
+    }
+    if (filters.q) {
+      params.set("q", filters.q);
+    }
+    if (filters.limit !== undefined) {
+      params.set("limit", String(filters.limit));
+    }
+    const query = params.toString();
+    return this.get(`/api/pkos/objects${query ? `?${query}` : ""}`, isObjectListResponse, signal);
+  }
+
+  getObject(objectId: string, signal?: AbortSignal): Promise<ObjectDetailResponse> {
+    return this.get(`/api/pkos/objects/${encodeURIComponent(objectId)}`, isObjectDetailResponse, signal);
+  }
+
+  renderObject(objectId: string, signal?: AbortSignal): Promise<ObjectRenderView> {
+    return this.get(`/api/pkos/objects/${encodeURIComponent(objectId)}/render`, isObjectRenderView, signal);
+  }
+
+  createObject(input: ObjectCreateRequest, signal?: AbortSignal): Promise<ActionSubmitResponse> {
+    return this.post("/api/pkos/objects", input, isActionSubmitResponse, signal);
+  }
+
+  updateObject(objectId: string, input: ObjectUpdateRequest, signal?: AbortSignal): Promise<ActionSubmitResponse> {
+    return this.put(`/api/pkos/objects/${encodeURIComponent(objectId)}`, input, isActionSubmitResponse, signal);
+  }
+
+  getObjectDeletePreflight(objectId: string, input: ObjectDeletePreflightRequest = {}, signal?: AbortSignal): Promise<ObjectDeletePreflight> {
+    return this.post(`/api/pkos/objects/${encodeURIComponent(objectId)}/delete-preflight`, input, isObjectDeletePreflight, signal);
+  }
+
+  deleteObject(objectId: string, input: ObjectDeleteRequest, signal?: AbortSignal): Promise<ActionSubmitResponse> {
+    return this.post(`/api/pkos/objects/${encodeURIComponent(objectId)}/delete`, input, isActionSubmitResponse, signal);
+  }
+
   async *sendChatMessage(input: SendChatMessageInput, signal?: AbortSignal): AsyncGenerator<AgentEvent> {
     let response: Response;
     try {
@@ -177,7 +240,7 @@ export class AgentApiClient {
     if (!response.ok) {
       const payload = await parseResponseJson(response);
       const error = errorPayload(payload);
-      throw new AgentApiClientError(response.status, error.code, error.message);
+      throw new AgentApiClientError(response.status, error.code, error.message, error.requestId, payload);
     }
     if (!response.body) {
       throw new AgentApiClientError(response.status, "empty_stream", "server returned an empty stream");
@@ -188,7 +251,7 @@ export class AgentApiClient {
         continue;
       }
       if (isRecord(item) && item.ok === false && isApiErrorPayload(item.error)) {
-        throw new AgentApiClientError(response.status, item.error.code, item.error.message);
+        throw new AgentApiClientError(response.status, item.error.code, item.error.message, typeof item.requestId === "string" ? item.requestId : undefined, item);
       }
       throw new AgentApiClientError(response.status, "invalid_stream_event", "server stream event shape was not recognized");
     }
@@ -204,6 +267,20 @@ export class AgentApiClient {
       this.url(path),
       {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal,
+      },
+      guard,
+    );
+  }
+
+  private put<T>(path: string, body: JsonObject, guard: Guard<T>, signal?: AbortSignal): Promise<T> {
+    return requestJson(
+      this.fetchImpl,
+      this.url(path),
+      {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
         signal,
@@ -244,6 +321,20 @@ export async function postJson<T>(path: string, body: JsonObject, guard: Guard<T
   );
 }
 
+export async function putJson<T>(path: string, body: JsonObject, guard: Guard<T>, signal?: AbortSignal): Promise<T> {
+  return requestJson(
+    fetch.bind(globalThis),
+    path,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    },
+    guard,
+  );
+}
+
 async function requestJson<T>(fetchImpl: FetchLike, path: string, init: RequestInit, guard: Guard<T>): Promise<T> {
   let response: Response;
   try {
@@ -256,7 +347,7 @@ async function requestJson<T>(fetchImpl: FetchLike, path: string, init: RequestI
   const payload = await parseResponseJson(response);
   if (!response.ok) {
     const error = errorPayload(payload);
-    throw new AgentApiClientError(response.status, error.code, error.message);
+    throw new AgentApiClientError(response.status, error.code, error.message, error.requestId, payload);
   }
   if (!guard(payload)) {
     throw new AgentApiClientError(response.status, "invalid_response", "server response shape was not recognized");
@@ -281,7 +372,7 @@ async function requestJsonWithDiagnostics<T extends HealthResponse>(
   const payload = await parseResponseJson(response);
   if (!response.ok) {
     const error = errorPayload(payload);
-    throw new AgentApiClientError(response.status, error.code, error.message);
+    throw new AgentApiClientError(response.status, error.code, error.message, error.requestId, payload);
   }
   if (!guard(payload)) {
     throw new AgentApiClientError(response.status, "invalid_response", "server response shape was not recognized");
@@ -308,11 +399,16 @@ async function parseResponseJson(response: Response): Promise<unknown> {
   }
 }
 
-function errorPayload(payload: unknown): { code: string; message: string } {
+function errorPayload(payload: unknown): { code: string; message: string; requestId?: string } {
+  if (isRecord(payload) && isRecord(payload.result) && payload.result.status === "error") {
+    const code = typeof payload.result.errorCode === "string" ? payload.result.errorCode : "request_failed";
+    const message = typeof payload.result.message === "string" ? payload.result.message : "request failed";
+    return { code, message, requestId: typeof payload.requestId === "string" ? payload.requestId : undefined };
+  }
   if (isRecord(payload) && isRecord(payload.error)) {
     const code = typeof payload.error.code === "string" ? payload.error.code : "request_failed";
     const message = typeof payload.error.message === "string" ? payload.error.message : "request failed";
-    return { code, message };
+    return { code, message, requestId: typeof payload.requestId === "string" ? payload.requestId : undefined };
   }
   return { code: "request_failed", message: "request failed" };
 }

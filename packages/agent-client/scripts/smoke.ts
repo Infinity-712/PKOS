@@ -6,7 +6,9 @@ import {
   applySubmitError,
   applySubmitResponse,
   isHealthResponse,
+  isActionSubmitResponse,
   isChatMessageListResponse,
+  isObjectTypeContractResponse,
   isRuntimeInfoResponse,
   isRuntimeReminderNotificationsResponse,
   isSuccessfulAttempt,
@@ -303,6 +305,22 @@ const client = new AgentApiClient({
     if (url.endsWith("/api/actions/inbox-append") || url.endsWith("/api/actions/state-append")) {
       return jsonResponse({ ok: true, requestId: "request-1", replayed: false, result: { status: "written", operation: "pkos.append" } });
     }
+    if (url.endsWith("/api/pkos/objects") && init?.method === "POST") {
+      return jsonResponse(
+        {
+          ok: false,
+          requestId: "object-client-invalid-id",
+          replayed: false,
+          result: {
+            status: "error",
+            operation: "pkos.object.create",
+            errorCode: "invalid_object_id",
+            message: "object id length is invalid",
+          },
+        },
+        400,
+      );
+    }
     if (url.endsWith("/api/chat/send")) {
       const body = typeof init?.body === "string" ? JSON.parse(init.body) as { allowExternalProvider?: boolean } : {};
       assert(body.allowExternalProvider === true, "sendChatMessage did not forward per-request external consent");
@@ -380,6 +398,23 @@ await client.stateAppend({
   source: "web",
   note: "",
 });
+let objectCreateErrorVisible = false;
+try {
+  await client.createObject({
+    requestId: "object-client-invalid-id",
+    confirmed: true,
+    actor: "human",
+    object: { id: "fact.bad", type: "fact" },
+  });
+} catch (error) {
+  objectCreateErrorVisible =
+    error instanceof AgentApiClientError &&
+    error.status === 400 &&
+    error.code === "invalid_object_id" &&
+    error.message === "object id length is invalid" &&
+    error.requestId === "object-client-invalid-id";
+}
+assert(objectCreateErrorVisible, "AgentApiClient dropped action envelope result on HTTP 400");
 const streamed = [];
 for await (const event of client.sendChatMessage({ sessionId: "s1", message: "hello", allowExternalProvider: true })) {
   streamed.push(event.type);
@@ -393,6 +428,55 @@ assert(historyCall?.method === "GET", "getSessionMessages must use GET");
 assert(historyCall.bodyPresent === false, "getSessionMessages must not send a request body");
 assert(historyCall.signalPresent === true, "getSessionMessages did not forward AbortSignal");
 assert(formatDateTime("2026-07-09T16:00:00.000Z") === "2026-07-10 00:00:00", "formatDateTime did not use Asia/Shanghai");
+
+const objectTypeContractPayload = {
+  ok: true,
+  schemaVersion: "0.8-beta",
+  types: [
+    {
+      type: "fact",
+      editableFields: ["title"],
+      requiredFields: ["id"],
+      statusEnum: ["raw"],
+      fieldTypes: {},
+      srsEligible: true,
+      immutableFields: ["id", "type", "srs"],
+      supportedSupplementarySections: [],
+      objectId: {
+        minLength: 3,
+        maxLength: 64,
+        pattern: "^[a-z][a-z0-9_-]*(?:\\.[a-z0-9_-]+)+$",
+        humanReadablePattern: "lowercase ASCII letters and numbers, separated by dots, hyphens, or underscores",
+        example: "fact.example",
+        prefixRequirement: "must_start_with_type_dot",
+      },
+    },
+  ],
+};
+assert(isObjectTypeContractResponse(objectTypeContractPayload), "object type contract guard rejected objectId contract");
+assert(!isObjectTypeContractResponse({ ...objectTypeContractPayload, types: [{ ...objectTypeContractPayload.types[0], objectId: undefined }] }), "object type contract guard accepted missing objectId contract");
+assert(
+  !isObjectTypeContractResponse({
+    ...objectTypeContractPayload,
+    types: [{ ...objectTypeContractPayload.types[0], objectId: { ...objectTypeContractPayload.types[0].objectId, maxLength: "64" } }],
+  }),
+  "object type contract guard accepted malformed objectId maxLength",
+);
+
+const reviewBatch = {
+  items: [{ objectId: "fact.one", requestId: "batch:one", status: "written", eventId: "event-1" }],
+  failures: [{ objectId: "fact.missing", requestId: "batch:missing", code: "object_not_found" }],
+};
+const batchEnvelope = { ok: true, requestId: "batch", replayed: true, result: { status: "written", operation: "pkos.review.rating_batch", reviewBatch } };
+assert(isActionSubmitResponse(batchEnvelope), "bounded batch outcomes rejected");
+for (const invalidBatch of [
+  { ...reviewBatch, items: Array(101).fill(reviewBatch.items[0]) },
+  { ...reviewBatch, failures: [{ ...reviewBatch.failures[0], code: 123 }] },
+  { ...reviewBatch, failures: [{ ...reviewBatch.failures[0], message: "must not expose raw CLI message" }] },
+  { ...reviewBatch, items: [{ ...reviewBatch.items[0], objectId: "x".repeat(257) }] },
+]) {
+  assert(!isActionSubmitResponse({ ...batchEnvelope, result: { ...batchEnvelope.result, reviewBatch: invalidBatch } }), "unbounded or malformed batch outcomes accepted");
+}
 
 console.log("AGENT_CLIENT_SMOKE_OK");
 

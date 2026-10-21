@@ -13,7 +13,10 @@ export type CaptureActionName =
   | "reminder-reschedule"
   | "pkos.review.rating"
   | "pkos.review.rating_batch"
-  | "pkos.review.correction";
+  | "pkos.review.correction"
+  | "pkos.object.create"
+  | "pkos.object.update"
+  | "pkos.object.delete";
 
 export type ActionAttemptStatus =
   | "draft"
@@ -153,6 +156,15 @@ function endpointForAction(draft: ActionDraft): string {
   if (draft.actionName === "pkos.review.correction") {
     return "/api/pkos/review/corrections";
   }
+  if (draft.actionName === "pkos.object.create") {
+    return "/api/pkos/objects";
+  }
+  if (draft.actionName === "pkos.object.update" && typeof draft.body.objectId === "string") {
+    return `/api/pkos/objects/${encodeURIComponent(draft.body.objectId)}`;
+  }
+  if (draft.actionName === "pkos.object.delete" && typeof draft.body.objectId === "string") {
+    return `/api/pkos/objects/${encodeURIComponent(draft.body.objectId)}/delete`;
+  }
   return "/api/actions/invalid";
 }
 
@@ -198,11 +210,26 @@ function statusFromErrorCode(code: string): ActionAttemptStatus {
     code === "target_event_not_found" ||
     code === "correction_target_not_latest" ||
     code === "invalid_items_json" ||
-    code === "no_successful_review_items"
+    code === "no_successful_review_items" ||
+    code === "invalid_object_id" ||
+    code === "invalid_object_type" ||
+    code === "object_id_type_mismatch" ||
+    code === "object_id_exists" ||
+    code === "object_id_tombstoned" ||
+    code === "schema_validation_failed" ||
+    code === "unknown_field" ||
+    code === "immutable_field" ||
+    code === "invalid_revision" ||
+    code === "typed_object_id_mismatch" ||
+    code === "deletion_blocked" ||
+    code === "data_root_not_git" ||
+    code === "data_root_git_root_mismatch" ||
+    code === "unsafe_object_location" ||
+    code === "object_path_collision"
   ) {
     return "invalid_input";
   }
-  if (code === "idempotency_conflict") {
+  if (code === "idempotency_conflict" || code === "object_revision_conflict" || code === "data_root_dirty") {
     return "conflict";
   }
   if (code === "request_in_progress") {

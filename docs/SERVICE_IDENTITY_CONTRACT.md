@@ -29,6 +29,10 @@ It declares:
 - required SQLite schema version;
 - supported API capabilities.
 
+The v0.8-beta Object Authority slice adds the `object-authority-v1`
+capability. A running Agent Server missing this capability must be treated as a
+stale build for Web object editing.
+
 Capabilities are sorted before fingerprinting, so declaration order is not meaningful. Adding, removing, or renaming a capability changes the service build fingerprint.
 
 ## Build Fingerprint
@@ -106,13 +110,35 @@ Provider configuration does not make health false. A schema older than the manif
 - all manifest capabilities are present;
 - database schema is compatible.
 
+Both current source identity and the running service must also be clean. If
+either reports `dirty=true`, automatic reuse is refused even when HEAD, runtime,
+build fingerprint, and capabilities match. The script returns
+`AGENT_SERVER_DIRTY_REUSE_REFUSED` with an explicit-restart instruction; it does
+not stop the existing process. Runtime mismatches retain their existing error;
+missing or foreign service identities still fail the existing identity checks.
+
+An unoccupied port may start a new Agent Server from dirty source. Successful
+startup displays the source dirty state. Its readiness check still verifies the
+full runtime/build/API/schema/capability identity, without applying the reuse-only
+dirty restriction. No source-set fingerprint is introduced.
+
 If runtime differs, the script returns `AGENT_SERVER_RUNTIME_MISMATCH`.
 
-If runtime matches but service/build/capability/schema does not match, the script returns `AGENT_SERVER_BUILD_MISMATCH`.
+If runtime matches but service/build/capability/schema does not match, the script
+returns `AGENT_SERVER_BUILD_MISMATCH`, unless a recognized Agent Server was already
+refused by the dirty-reuse policy above.
 
 The script does not auto-kill unknown or stale processes. Stop and inspect them manually.
 
 ## Verification
+
+The local runtime smoke uses temporary profile/data/core directories and loads
+the actual script functions without executing the production dispatcher. Network
+and process boundaries use synthetic fixtures; only synchronous PowerShell test
+children are launched. It never moves the real runtime profile, opens a real DB,
+binds a port, or calls a model. Each child removes only its own temporary directory.
+This verifies orchestration and identity decisions, not real server boot or HTTP
+transport. The Agent Server identity smokes below are separate checks.
 
 ```powershell
 npm run service-identity-smoke --prefix apps/agent-server

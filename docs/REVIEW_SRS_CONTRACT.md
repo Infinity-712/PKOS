@@ -64,6 +64,20 @@ Ratings remain compatible with the existing 1..5 range:
 
 Web labels are bilingual, but Python and Web share the same numeric mapping.
 
+New ratings cannot precede the object's latest accepted rating time. The
+existing timestamp parser normalizes offsets to UTC seconds. Rejection uses
+`review_time_regression` (HTTP 409) before any event, SRS/projection write or
+commit. Exact requestId replay is resolved before this time check, so later
+ratings cannot invalidate an earlier accepted request's replay.
+
+The existing replay order is sorted log path, then physical JSONL line order.
+Equal normalized timestamps share a date partition and retain append order
+under the Data Root lock. Corrections retain their target's chronological slot,
+including undo; they do not erase that rating's timestamp watermark. Correction
+requests continue to reference explicit targets, not this new-rating time gate.
+Legacy-only objects use their compatibility state's lastReviewedAt as the floor.
+Already backdated historical logs are not migrated or recalculated here.
+
 ## Algorithm Versioning
 
 Current algorithm:
@@ -102,6 +116,23 @@ If the current object hash differs from the latest rating hash, current/queue it
 
 This does not automatically reset SRS. The UI warns the human reviewer. Reset is intentionally deferred.
 
+## Object Authority Integration
+
+Object create, update, and delete are handled by the v0.8-beta Object Authority
+flow. Reviewable objects (`fact`, `skill`, and `claim`) enter Review/SRS
+onboarding when projections are rebuilt. `creative` remains excluded.
+
+Object updates preserve existing SRS state and never create review events. If
+the semantic content hash changes, queues and item views expose
+`contentChangedSinceLastReview`.
+
+Object deletes do not delete review logs. Historical review events remain
+append-only and are surfaced as orphaned when their object no longer exists.
+
+Review Show Answer must use `GET /api/pkos/objects/:objectId/render` after the
+human explicitly reveals the answer; review queue payloads must remain bounded
+and must not include full object body text.
+
 ## Legacy Compatibility
 
 Old v0.4 rows such as `{"id":"...","score":3,"ts":"..."}` are not rewritten. They are marked `legacy_unverified`.
@@ -132,15 +163,23 @@ Batch semantics are deterministic partial success: successful items append indep
 
 ## Git And Data Root
 
-Review writes operate on `PKOS_DATA_ROOT`. If that data root is a Git repository, the Python CLI commits only the changed review authority/projection files for the current operation.
+Rating, batch rating and correction require a Git working tree whose resolved
+repository root is exactly the resolved `PKOS_DATA_ROOT`, checked before file
+mutation. A missing repository, bare repository or ancestor/Core repository
+fails with `data_root_git_required` (HTTP 409). There is no production bypass
+flag and no successful-write fallback without version history. This replaces
+the earlier non-Git write behavior; Task/Reminder persistence is unchanged.
 
-If data root is not a Git repository, writes still complete and return:
+The CLI commits only this operation's authority files and affected object SRS
+compatibility projection. `runtime/` JSON is excluded. Idempotent replay makes
+no new commit. The internal `commit=False` call is for the enclosing batch
+transaction, not an exposed CLI option. Tests initialize isolated Git fixtures.
 
-```json
-{ "gitCommitCreated": false }
-```
-
-The CLI must not accidentally commit the core repository when `PKOS_DATA_ROOT` points elsewhere.
+Read-only get/history/status/queue do not require Git and never modify object
+authority. Queue may refresh its runtime JSON cache. Interrupted, uncommitted
+review logs fail closed with `review_recovery_required`; automatic crash
+recovery is not implemented. Do not infer event ownership from staged status,
+delete accepted events, or discard unrelated changes during manual recovery.
 
 ## Agent Boundary
 

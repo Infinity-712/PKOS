@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -10,6 +11,8 @@ type JsonRecord = Record<string, unknown>;
 
 const OBJECT_SECRET = "REVIEW_API_OBJECT_CONTENT_SHOULD_NOT_REACH_AUDIT";
 const CORRECTION_REASON_SECRET = "REVIEW_API_CORRECTION_REASON_SHOULD_NOT_REACH_AUDIT";
+const RATING_DAY = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+const REVIEWED_AT = `${RATING_DAY}T00:00:00Z`;
 const dataRoot = mkdtempSync(join(tmpdir(), "pkos-review-api-smoke-"));
 process.env.PKOS_DATA_ROOT = dataRoot;
 process.env.PKOS_ACTION_RUNNING_STALE_MS = "1";
@@ -20,14 +23,20 @@ const server = createAgentHttpServer({ db });
 
 try {
   seedObjects(dataRoot);
+  writeFileSync(join(dataRoot, ".gitignore"), "/runtime/\n", "utf8");
+  for (const args of [["init"], ["config", "user.name", "PKOS Test"],
+    ["config", "user.email", "pkos-test@example.invalid"], ["config", "gc.auto", "0"],
+    ["add", "--", ".gitignore", "objects"], ["commit", "-m", "seed review API fixture"]]) {
+    execFileSync("git", ["-C", dataRoot, ...args], { stdio: "pipe" });
+  }
   const baseUrl = await listen(server);
-  const logPath = join(dataRoot, "review", "logs", "2026-07-20.jsonl");
+  const logPath = join(dataRoot, "review", "logs", `${RATING_DAY}.jsonl`);
 
-  const status = await getJson<JsonRecord>(baseUrl, "/api/pkos/review/status?now=2026-07-20T00:00:00Z");
+  const status = await getJson<JsonRecord>(baseUrl, `/api/pkos/review/status?now=${REVIEWED_AT}`);
   assert(status.status === 200, `status expected 200, got ${status.status}`);
   assert(status.payload.ok === true, "review status did not return ok");
 
-  const queue = await getJson<JsonRecord>(baseUrl, "/api/pkos/review/queue?now=2026-07-20T00:00:00Z&limit=10");
+  const queue = await getJson<JsonRecord>(baseUrl, `/api/pkos/review/queue?now=${REVIEWED_AT}&limit=10`);
   assert(queue.status === 200, `queue expected 200, got ${queue.status}`);
   assert(Array.isArray(queue.payload.due), "queue did not return due array");
   assert(JSON.stringify(queue.payload).indexOf(OBJECT_SECRET) === -1, "queue leaked object content");
@@ -44,7 +53,7 @@ try {
     requestId: "review-api-no-confirm",
     objectId: "fact.api.one",
     rating: 4,
-    reviewedAt: "2026-07-20T00:00:00Z",
+    reviewedAt: REVIEWED_AT,
     actor: "human",
   });
   assert(noConfirm.status === 403, `missing confirmation expected 403, got ${noConfirm.status}`);
@@ -54,7 +63,7 @@ try {
     requestId: "review-api-rate-1",
     objectId: "fact.api.one",
     rating: 4,
-    reviewedAt: "2026-07-20T00:00:00Z",
+    reviewedAt: REVIEWED_AT,
     actor: "human",
     confirmed: true,
   });
@@ -67,7 +76,7 @@ try {
     requestId: "review-api-rate-1",
     objectId: "fact.api.one",
     rating: 4,
-    reviewedAt: "2026-07-20T00:00:00Z",
+    reviewedAt: REVIEWED_AT,
     actor: "human",
     confirmed: true,
   });
@@ -79,7 +88,7 @@ try {
     requestId: "review-api-rate-1",
     objectId: "fact.api.one",
     rating: 2,
-    reviewedAt: "2026-07-20T00:00:00Z",
+    reviewedAt: REVIEWED_AT,
     actor: "human",
     confirmed: true,
   });
@@ -92,11 +101,14 @@ try {
       { objectId: "fact.api.batch", rating: 3 },
       { objectId: "fact.api.missing", rating: 5 },
     ],
-    reviewedAt: "2026-07-20T01:00:00Z",
+    reviewedAt: `${RATING_DAY}T01:00:00Z`,
     actor: "human",
     confirmed: true,
   });
   assert(batch.status === 200, `batch expected 200, got ${batch.status}`);
+  const batchOutcome = (batch.payload.result as JsonRecord).reviewBatch as { items: JsonRecord[]; failures: JsonRecord[] };
+  assert(batchOutcome.items.length === 1 && batchOutcome.items[0].objectId === "fact.api.batch", "batch lost successful item outcome");
+  assert(batchOutcome.failures.length === 1 && batchOutcome.failures[0].code === "object_not_found", "batch lost failed item outcome");
   assert(lineCount(logPath) === 2, "batch did not append one successful item event");
   const batchReplay = await postJson<JsonRecord>(baseUrl, "/api/pkos/review/ratings:batch", {
     requestId: "review-api-batch-1",
@@ -104,12 +116,13 @@ try {
       { objectId: "fact.api.batch", rating: 3 },
       { objectId: "fact.api.missing", rating: 5 },
     ],
-    reviewedAt: "2026-07-20T01:00:00Z",
+    reviewedAt: `${RATING_DAY}T01:00:00Z`,
     actor: "human",
     confirmed: true,
   });
   assert(batchReplay.status === 200, `batch replay expected 200, got ${batchReplay.status}`);
   assert(batchReplay.payload.replayed === true, "batch replay was not reported");
+  assert(JSON.stringify(batchReplay.payload.result) === JSON.stringify(batch.payload.result), "batch replay changed outcomes");
   assert(lineCount(logPath) === 2, "batch replay appended duplicate event");
 
   const historyAfter = await getJson<JsonRecord>(baseUrl, "/api/pkos/review/items/fact.api.one/history");
@@ -125,25 +138,32 @@ try {
     confirmed: true,
   });
   assert(correction.status === 200, `correction expected 200, got ${correction.status}`);
-  assert(lineCount(logPath) === 3, "correction did not append authority event");
+  const afterCorrection = reviewEvents(dataRoot);
+  assert(afterCorrection.length === 3, "correction did not append exactly one authority event");
+  const correctionEvent = afterCorrection.find((event) => event.requestId === "review-api-correction-1");
+  assert(correctionEvent?.type === "review_correction" && correctionEvent.targetEventId === eventId, "correction target/request id was not preserved");
+  const correctionLog = join(dataRoot, "review", "logs", `${String(correctionEvent.createdAt).slice(0, 10)}.jsonl`);
+  assert(correctionLog !== logPath && lineCount(logPath) === 2, "cross-date correction changed the original rating partition");
+  assert(readFileSync(correctionLog, "utf8").includes(String(correctionEvent.id)), "correction did not use its creation date partition");
 
   const invalid = await postJson<JsonRecord>(baseUrl, "/api/pkos/review/ratings", {
     requestId: "review-api-invalid-object",
     objectId: "fact.api.missing",
     rating: 4,
-    reviewedAt: "2026-07-20T00:00:00Z",
+    reviewedAt: REVIEWED_AT,
     actor: "human",
     confirmed: true,
   });
-  assert(invalid.status >= 400, "invalid object write unexpectedly succeeded");
-  assert(lineCount(logPath) === 3, "invalid object appended authority event");
+  assert(invalid.status === 400, "invalid object write did not preserve domain HTTP status");
+  assert((invalid.payload.result as JsonRecord).errorCode === "object_not_found", "invalid object lost domain error code");
+  assert(JSON.stringify(reviewEvents(dataRoot)) === JSON.stringify(afterCorrection), "invalid object changed authority events");
 
   seedStaleRunning(db);
   const indeterminate = await postJson<JsonRecord>(baseUrl, "/api/pkos/review/ratings", {
     requestId: "review-api-stale-running",
     objectId: "fact.api.one",
     rating: 4,
-    reviewedAt: "2026-07-20T00:00:00Z",
+    reviewedAt: REVIEWED_AT,
     actor: "human",
     confirmed: true,
   });
@@ -213,7 +233,7 @@ function seedStaleRunning(database: AgentDatabase): void {
         requestId: "review-api-stale-running",
         objectId: "fact.api.one",
         rating: 4,
-        reviewedAt: "2026-07-20T00:00:00.000Z",
+        reviewedAt: new Date(REVIEWED_AT).toISOString(),
         actor: "human",
       }),
       "running",
@@ -270,6 +290,13 @@ function lineCount(path: string): number {
   } catch {
     return 0;
   }
+}
+
+function reviewEvents(root: string): JsonRecord[] {
+  return readdirSync(join(root, "review", "logs"))
+    .filter((name) => name.endsWith(".jsonl"))
+    .sort()
+    .flatMap((name) => readFileSync(join(root, "review", "logs", name), "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as JsonRecord));
 }
 
 function actionPayloadHash(actionName: string, toolInput: JsonRecord): string {

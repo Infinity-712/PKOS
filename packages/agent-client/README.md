@@ -38,11 +38,18 @@ Covered APIs:
 - fixed request-attempt endpoint mapping for `POST /api/pkos/review/ratings`
 - fixed request-attempt endpoint mapping for `POST /api/pkos/review/ratings:batch`
 - fixed request-attempt endpoint mapping for `POST /api/pkos/review/corrections`
+- `GET /api/pkos/object-types`
+- `GET /api/pkos/objects`
+- `GET /api/pkos/objects/:objectId`
+- `GET /api/pkos/objects/:objectId/render`
+- `POST /api/pkos/objects/:objectId/delete-preflight`
+- fixed object write endpoints for create, update, and delete
 
 Web-only authority management surfaces such as Inbox Review, Action Resolution, and Audit can keep their local client code.
 Task note endpoint mapping is intentionally not exposed; current v0.7-alpha task notes are legacy-compatible authority events only.
 Reminder runtime notifications are read-only runtime state. The shared client does not create native notifications and does not write Reminder authority.
 Review/SRS mutations still require fixed endpoints, human confirmation, and Python authority idempotency; the client only freezes endpoint/requestId/payload and does not grade mastery.
+Object mutations still require fixed endpoints, human confirmation, Python authority idempotency, and `baseRevision` where applicable. The client only provides typed API calls, guards, and frozen request state; it never writes YAML, tombstones, Git state, or browser storage.
 
 ## Behavior
 
@@ -55,6 +62,10 @@ Real-provider chat consent is per request. `sendChatMessage()` can forward `allo
 `abortGeneration(generationId)` calls the fixed backend abort endpoint. It requests local provider stream cancellation, but remote model services may already have processed part of a request.
 
 The client does not persist payloads, does not use browser storage, and does not print message/content/note fields. It also does not expose Python commands, executable paths, or filesystem paths.
+
+Object guards validate SHA-256 revisions/hashes, known object types, safe
+relative authority locations, and absence of secret-like keys in object detail
+payloads. They reject absolute paths and path traversal in returned locations.
 
 ## NDJSON
 

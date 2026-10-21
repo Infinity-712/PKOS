@@ -222,6 +222,11 @@ export type AgentEvent = ContentDeltaAgentEvent | AgentEventBase<Exclude<AgentEv
 
 export type WritebackStatus = "written" | "blocked" | "error";
 
+export type ReviewBatchOutcome = {
+  items: Array<{ objectId: string; requestId: string; status: "written" | "replayed"; eventId: string }>;
+  failures: Array<{ objectId: string; requestId: string; code: string }>;
+};
+
 export type WritebackResult = {
   status: WritebackStatus;
   operation: string;
@@ -229,6 +234,11 @@ export type WritebackResult = {
   errorCode?: string;
   target?: string;
   recordId?: string;
+  commitHash?: string;
+  changedFiles?: string[];
+  fileRevisionSha256?: string;
+  objectContentSha256?: string;
+  reviewBatch?: ReviewBatchOutcome;
 };
 
 export type ApiErrorPayload = {
@@ -325,4 +335,151 @@ export type SendChatMessageInput = {
   sessionId: string;
   message: string;
   allowExternalProvider?: boolean;
+};
+
+export type ObjectKind = "fact" | "claim" | "skill" | "creative";
+
+export type ObjectIdContract = {
+  minLength: number;
+  maxLength: number;
+  pattern: string;
+  humanReadablePattern: string;
+  example: string;
+  prefixRequirement: "must_start_with_type_dot";
+};
+
+export type ObjectTypeContract = {
+  type: ObjectKind;
+  editableFields: string[];
+  requiredFields: string[];
+  statusEnum: string[];
+  fieldTypes: JsonObject;
+  srsEligible: boolean;
+  immutableFields: string[];
+  supportedSupplementarySections: string[];
+  objectId: ObjectIdContract;
+};
+
+export type ObjectTypeContractResponse = {
+  ok: boolean;
+  schemaVersion: string;
+  types: ObjectTypeContract[];
+};
+
+export type ObjectListItem = {
+  id: string;
+  type: ObjectKind;
+  status: string;
+  title: string;
+  summary: string;
+  updatedAt: string;
+  fileRevisionSha256: string;
+  objectContentSha256: string;
+  srsEligible: boolean;
+  contentChangedSinceLastReview: boolean;
+  location: string;
+};
+
+export type ObjectListResponse = {
+  ok: boolean;
+  schemaVersion: string;
+  generatedAt: string;
+  count: number;
+  totalCount: number;
+  filters: JsonObject;
+  items: ObjectListItem[];
+  source: JsonObject;
+  dataRootFingerprint: string;
+};
+
+export type ObjectDetailResponse = {
+  ok: boolean;
+  schemaVersion: string;
+  object: JsonObject;
+  location: string;
+  fileRevisionSha256: string;
+  objectContentSha256: string;
+  srsEligible: boolean;
+  contentChangedSinceLastReview: boolean;
+  reviewSummary: JsonObject | null;
+  editableFields: string[];
+  immutableFields: string[];
+  additionalFields: string[];
+  dataRootFingerprint: string;
+};
+
+export type ObjectRenderSection = {
+  id: string;
+  title: string;
+  kind: "list" | "object" | "text";
+  items: JsonValue[];
+};
+
+export type ObjectRenderView = {
+  ok: boolean;
+  schemaVersion: string;
+  objectId: string;
+  objectType: ObjectKind;
+  fileRevisionSha256: string;
+  dataRootFingerprint: string;
+  body: string;
+  sections: ObjectRenderSection[];
+  metadata: JsonObject;
+  objectContentSha256: string;
+};
+
+export type ObjectListFilters = {
+  type?: ObjectKind;
+  status?: string;
+  q?: string;
+  limit?: number;
+};
+
+export type ObjectCreateRequest = JsonObject & {
+  requestId: string;
+  confirmed: boolean;
+  actor: string;
+  object: JsonObject;
+};
+
+export type ObjectUpdateRequest = JsonObject & {
+  requestId: string;
+  confirmed: boolean;
+  actor: string;
+  baseRevision: string;
+  patch: JsonObject;
+};
+
+export type ObjectDeletePreflightRequest = JsonObject & {
+  baseRevision?: string;
+};
+
+export type ObjectDeletePreflight = {
+  ok: boolean;
+  schemaVersion: string;
+  objectId: string;
+  objectType: ObjectKind;
+  fileRevisionSha256: string;
+  objectContentSha256: string;
+  reviewEventCount: number;
+  objectReferences: JsonObject[];
+  publishReferences: JsonObject[];
+  taskReferences: JsonObject[];
+  reminderReferences: JsonObject[];
+  digestReferences: JsonObject[];
+  tombstoneExists: boolean;
+  blockers: JsonObject[];
+  warnings: JsonObject[];
+  referenceCoverage: JsonObject[];
+  canDelete: boolean;
+  dataRootFingerprint: string;
+};
+
+export type ObjectDeleteRequest = JsonObject & {
+  requestId: string;
+  confirmed: boolean;
+  actor: string;
+  typedObjectId: string;
+  baseRevision: string;
+  reason: string;
 };

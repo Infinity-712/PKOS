@@ -1,5 +1,6 @@
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput } from "../tools/builtin/inboxReview.js";
+import type { ObjectCreateInput, ObjectDeleteInput, ObjectUpdateInput } from "../tools/builtin/objectAuthority.js";
 import type { ReminderActionInput, ReminderCreateInput, ReminderRescheduleInput } from "../tools/builtin/reminderFlow.js";
 import type { ReviewBatchRatingInput, ReviewCorrectionInput, ReviewRatingInput } from "../tools/builtin/reviewFlow.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
@@ -22,6 +23,9 @@ const DIRECT_WRITE_TOOLS = new Set([
   "pkos.review.rating",
   "pkos.review.rating_batch",
   "pkos.review.correction",
+  "pkos.object.create",
+  "pkos.object.update",
+  "pkos.object.delete",
 ]);
 
 export class WritebackRouter {
@@ -81,6 +85,15 @@ export class WritebackRouter {
     }
     if (tool.name === "pkos.review.correction") {
       return this.cli.reviewCorrect(input as ReviewCorrectionInput);
+    }
+    if (tool.name === "pkos.object.create") {
+      return this.cli.objectCreate(input as ObjectCreateInput);
+    }
+    if (tool.name === "pkos.object.update") {
+      return this.cli.objectUpdate(input as ObjectUpdateInput);
+    }
+    if (tool.name === "pkos.object.delete") {
+      return this.cli.objectDelete(input as ObjectDeleteInput);
     }
 
     return Promise.resolve(

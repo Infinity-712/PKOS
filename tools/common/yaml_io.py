@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -29,7 +30,13 @@ def _parse_scalar(text: str) -> Any:
         return []
     if v == "{}":
         return {}
-    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+    if v.startswith('"') and v.endswith('"'):
+        try:
+            parsed = json.loads(v)
+            return parsed if isinstance(parsed, str) else v[1:-1]
+        except Exception:
+            return v[1:-1]
+    if v.startswith("'") and v.endswith("'"):
         return v[1:-1]
     try:
         if "." in v:
@@ -51,6 +58,18 @@ def _looks_like_inline_mapping(text: str) -> bool:
         if not (ch.isalnum() or ch in '._-'):
             return False
     return True
+
+
+def _nested_container(lines: list[str], start: int, indent: int, default: Any) -> Any:
+    for index in range(start, len(lines)):
+        raw = lines[index]
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        if len(raw) - len(raw.lstrip(" ")) <= indent:
+            break
+        line = raw.strip()
+        return [] if line == "-" or line.startswith("- ") else {}
+    return default
 
 
 def parse_yaml_text(text: str) -> dict[str, Any] | list[Any] | None:
@@ -79,7 +98,7 @@ def parse_yaml_text(text: str) -> dict[str, Any] | list[Any] | None:
         if line == "-":
             if not isinstance(container, list):
                 return None
-            node: dict[str, Any] = {}
+            node = _nested_container(lines, i, indent, {})
             container.append(node)
             stack.append((indent, node))
             continue
@@ -111,26 +130,7 @@ def parse_yaml_text(text: str) -> dict[str, Any] | list[Any] | None:
         value = value.strip()
 
         if value == "":
-            next_non_empty = None
-            j = i
-            while j < len(lines):
-                cand = lines[j]
-                if cand.strip() and not cand.lstrip().startswith("#"):
-                    next_non_empty = cand
-                    break
-                j += 1
-
-            if next_non_empty is not None:
-                next_indent = len(next_non_empty) - len(next_non_empty.lstrip(" "))
-                next_line = next_non_empty.strip()
-                if next_indent > indent and next_line.startswith("- "):
-                    container[key] = []
-                elif next_indent > indent:
-                    container[key] = {}
-                else:
-                    container[key] = ""
-            else:
-                container[key] = ""
+            container[key] = _nested_container(lines, i, indent, "")
 
             if isinstance(container[key], (dict, list)):
                 stack.append((indent, container[key]))
@@ -145,11 +145,27 @@ def _dump_scalar(value: Any) -> str:
         return "null"
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, (int, float)):
+    if isinstance(value, float):
+        text = str(value)
+        if "e" in text and "." not in text:
+            text = text.replace("e", ".0e", 1)
+        return text
+    if isinstance(value, int):
         return str(value)
+    if isinstance(value, (dict, list)) and not value:
+        return "{}" if isinstance(value, dict) else "[]"
     s = str(value)
-    if s == "" or any(ch in s for ch in [":", "#", "[", "]", "{", "}"]):
-        return f'"{s}"'
+    unicode_line_break = any(ch in s for ch in "\x85\u2028\u2029")
+    if (
+        s == ""
+        or s.strip() != s
+        or _parse_scalar(s) != s
+        or s in {"null", "~", "true", "True", "false", "False", "[]", "{}"}
+        or any(ch in s for ch in [":", "#", "[", "]", "{", "}", "\n", "\r", '"'])
+        or any(ord(ch) < 32 for ch in s)
+        or unicode_line_break
+    ):
+        return json.dumps(s, ensure_ascii=unicode_line_break)
     return s
 
 
@@ -159,14 +175,14 @@ def _dump_yaml(value: Any, indent: int = 0) -> list[str]:
 
     if isinstance(value, dict):
         for k, v in value.items():
-            if isinstance(v, (dict, list)):
+            if isinstance(v, (dict, list)) and v:
                 lines.append(f"{space}{k}:")
                 lines.extend(_dump_yaml(v, indent + 2))
             else:
                 lines.append(f"{space}{k}: {_dump_scalar(v)}")
     elif isinstance(value, list):
         for item in value:
-            if isinstance(item, (dict, list)):
+            if isinstance(item, (dict, list)) and item:
                 lines.append(f"{space}-")
                 lines.extend(_dump_yaml(item, indent + 2))
             else:
@@ -186,10 +202,29 @@ def load_yaml(path: Path) -> tuple[dict[str, Any] | None, list[DataIssue]]:
     return data, []
 
 
+def _same_yaml_value(expected: Any, actual: Any) -> bool:
+    if type(expected) is not type(actual):
+        return False
+    if isinstance(expected, dict):
+        return (
+            all(isinstance(key, str) for key in expected)
+            and expected.keys() == actual.keys()
+            and all(_same_yaml_value(value, actual[key]) for key, value in expected.items())
+        )
+    if isinstance(expected, list):
+        return len(expected) == len(actual) and all(
+            _same_yaml_value(left, right) for left, right in zip(expected, actual)
+        )
+    return expected == actual
+
+
 def save_yaml(path: Path, data: dict[str, Any]) -> list[DataIssue]:
     try:
         lines = _dump_yaml(data)
         payload = "\n".join(lines) + "\n"
+        # Reject unsupported shapes or lossy serialization before any filesystem mutation.
+        if not isinstance(data, dict) or not _same_yaml_value(data, parse_yaml_text(payload)):
+            return [DataIssue(path, "$", "write failed: YAML round trip would change data or types")]
         path.parent.mkdir(parents=True, exist_ok=True)
 
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, dir=str(path.parent)) as tmp:

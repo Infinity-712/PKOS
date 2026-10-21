@@ -25,7 +25,9 @@
     "task-api-smoke": "tsx src/scripts/taskApiSmoke.ts",
     "reminder-api-smoke": "tsx src/scripts/reminderApiSmoke.ts",
     "reminder-scheduler-smoke": "tsx src/scripts/reminderSchedulerSmoke.ts",
-    "review-api-smoke": "tsx src/scripts/reviewApiSmoke.ts"
+    "review-api-smoke": "tsx src/scripts/reviewApiSmoke.ts",
+    "review-contract-smoke": "node --import tsx --test src/scripts/reviewContractSmoke.ts",
+    "object-api-smoke": "tsx src/scripts/objectApiSmoke.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

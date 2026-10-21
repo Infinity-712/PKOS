@@ -3,12 +3,13 @@ import { platform } from "node:os";
 import { resolveAgentPaths, type AgentPaths } from "../config/paths.js";
 import type { InboxAppendInput } from "../tools/builtin/inboxAppend.js";
 import type { InboxReviewMarkInput, InboxReviewStatus } from "../tools/builtin/inboxReview.js";
+import type { ObjectCreateInput, ObjectDeleteInput, ObjectUpdateInput } from "../tools/builtin/objectAuthority.js";
 import type { ReminderActionInput, ReminderCreateInput, ReminderRescheduleInput } from "../tools/builtin/reminderFlow.js";
 import type { ReviewBatchRatingInput, ReviewCorrectionInput, ReviewRatingInput } from "../tools/builtin/reviewFlow.js";
 import type { StateAppendInput } from "../tools/builtin/stateAppend.js";
 import type { TaskCreateInput, TaskTransitionInput } from "../tools/builtin/taskFlow.js";
 import { CliProcessRunner, type CliProcessRunResult } from "./CliProcessRunner.js";
-import { errorResult, type WritebackResult, writtenResult } from "./WritebackTypes.js";
+import { errorResult, type ReviewBatchOutcome, type WritebackResult, writtenResult } from "./WritebackTypes.js";
 
 type PkosCliClientOptions = {
   paths?: AgentPaths;
@@ -141,6 +142,17 @@ export type ReminderDueCliResult =
   | { ok: false; errorCode: string; message: string };
 
 export type ReviewCliResult =
+  | { ok: true; payload: Record<string, unknown> }
+  | { ok: false; errorCode: string; message: string };
+
+export type ObjectListFilters = {
+  type?: string;
+  status?: string;
+  q?: string;
+  limit?: number;
+};
+
+export type ObjectCliResult =
   | { ok: true; payload: Record<string, unknown> }
   | { ok: false; errorCode: string; message: string };
 
@@ -417,6 +429,67 @@ export class PkosCliClient {
     return this.runReviewWriteCommand("pkos.review.correction", args);
   }
 
+  async objectCreate(input: ObjectCreateInput): Promise<WritebackResult> {
+    return this.runObjectWriteCommand("pkos.object.create", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "object-create",
+      "--payload-json",
+      JSON.stringify(input.object),
+      "--actor",
+      input.actor,
+      "--request-id",
+      input.requestId,
+      "--confirmed",
+      "--json",
+    ]);
+  }
+
+  async objectUpdate(input: ObjectUpdateInput): Promise<WritebackResult> {
+    return this.runObjectWriteCommand("pkos.object.update", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "object-update",
+      "--object-id",
+      input.objectId,
+      "--patch-json",
+      JSON.stringify(input.patch),
+      "--base-revision",
+      input.baseRevision,
+      "--actor",
+      input.actor,
+      "--request-id",
+      input.requestId,
+      "--confirmed",
+      "--json",
+    ]);
+  }
+
+  async objectDelete(input: ObjectDeleteInput): Promise<WritebackResult> {
+    return this.runObjectWriteCommand("pkos.object.delete", [
+      "-B",
+      "-m",
+      "tools.pkos",
+      "object-delete",
+      "--object-id",
+      input.objectId,
+      "--typed-object-id",
+      input.typedObjectId,
+      "--base-revision",
+      input.baseRevision,
+      "--reason",
+      input.reason,
+      "--actor",
+      input.actor,
+      "--request-id",
+      input.requestId,
+      "--confirmed",
+      "--json",
+    ]);
+  }
+
   async reviewQueue(filters: { now?: string; limit?: number }): Promise<ReviewCliResult> {
     const args = ["-B", "-m", "tools.pkos", "review-queue", "--json"];
     if (filters.now) {
@@ -442,6 +515,43 @@ export class PkosCliClient {
 
   async reviewHistory(objectId: string): Promise<ReviewCliResult> {
     return this.runReviewReadCommand(["-B", "-m", "tools.pkos", "review-history", "--object-id", objectId, "--json"], "PKOS CLI rejected review history");
+  }
+
+  async objectTypes(): Promise<ObjectCliResult> {
+    return this.runObjectReadCommand(["-B", "-m", "tools.pkos", "object-types", "--json"], "PKOS CLI rejected object type contract");
+  }
+
+  async objectList(filters: ObjectListFilters): Promise<ObjectCliResult> {
+    const args = ["-B", "-m", "tools.pkos", "object-list", "--json"];
+    if (filters.type) {
+      args.push("--type", filters.type);
+    }
+    if (filters.status) {
+      args.push("--status", filters.status);
+    }
+    if (filters.q) {
+      args.push("--q", filters.q);
+    }
+    if (filters.limit !== undefined) {
+      args.push("--limit", String(filters.limit));
+    }
+    return this.runObjectReadCommand(args, "PKOS CLI rejected object list");
+  }
+
+  async objectGet(objectId: string): Promise<ObjectCliResult> {
+    return this.runObjectReadCommand(["-B", "-m", "tools.pkos", "object-get", "--object-id", objectId, "--json"], "PKOS CLI rejected object get");
+  }
+
+  async objectRender(objectId: string): Promise<ObjectCliResult> {
+    return this.runObjectReadCommand(["-B", "-m", "tools.pkos", "object-render", "--object-id", objectId, "--json"], "PKOS CLI rejected object render");
+  }
+
+  async objectDeletePreflight(input: { objectId: string; baseRevision?: string }): Promise<ObjectCliResult> {
+    const args = ["-B", "-m", "tools.pkos", "object-delete-preflight", "--object-id", input.objectId, "--json"];
+    if (input.baseRevision) {
+      args.push("--base-revision", input.baseRevision);
+    }
+    return this.runObjectReadCommand(args, "PKOS CLI rejected object delete preflight");
   }
 
   async inboxReviewList(filters: InboxReviewListFilters): Promise<InboxReviewCliListResult> {
@@ -732,7 +842,7 @@ export class PkosCliClient {
   }
 
   private async runReviewWriteCommand(operation: string, args: string[]): Promise<WritebackResult> {
-    const result = await this.runRawCommand(args);
+    const result = await this.runRawCommand(args, true);
     if (result.error) {
       return result.errorResult(operation);
     }
@@ -740,11 +850,19 @@ export class PkosCliClient {
     if (payload?.ok === false) {
       return errorResult({ operation, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, "PKOS CLI rejected review write") });
     }
+    const failure = cliRunFailure(result.result);
+    if (failure) {
+      return errorResult({ operation, errorCode: failure.errorCode, message: failure.message });
+    }
     if (!payload || payload.ok !== true) {
       return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI returned invalid review JSON" });
     }
+    const reviewBatch = operation === "pkos.review.rating_batch" ? parseReviewBatchOutcome(payload) : undefined;
+    if (reviewBatch === null) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI returned invalid review batch outcomes" });
+    }
     if (payload.status === "failed") {
-      return errorResult({ operation, errorCode: "no_successful_review_items", message: "PKOS review write had no successful items" });
+      return errorResult({ operation, errorCode: "no_successful_review_items", message: "PKOS review write had no successful items", reviewBatch });
     }
     const event = isRecord(payload.event) ? payload.event : {};
     const recordId = stringValue(event.id) || stringValue(payload.batchRequestId) || undefined;
@@ -752,12 +870,38 @@ export class PkosCliClient {
       operation,
       recordId,
       target: "review/logs",
+      reviewBatch,
       message: `PKOS review write ${stringValue(payload.status) || "completed"}`,
     });
   }
 
+  private async runObjectWriteCommand(operation: string, args: string[]): Promise<WritebackResult> {
+    const result = await this.runObjectCli(args);
+    const payload = parseCliJson(operation, result);
+    if (payload?.ok === false) {
+      return errorResult({ operation, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, "PKOS CLI rejected object write") });
+    }
+    const failure = cliRunFailure(result);
+    if (failure) {
+      return errorResult({ operation, errorCode: failure.errorCode, message: failure.message });
+    }
+    if (!payload || payload.ok !== true) {
+      return errorResult({ operation, errorCode: "cli_failed", message: "PKOS CLI returned invalid object JSON" });
+    }
+    return writtenResult({
+      operation,
+      recordId: stringValue(payload.objectId) || undefined,
+      target: stringValue(payload.location) || stringValue(payload.tombstonePath) || "objects",
+      commitHash: typeof payload.commitHash === "string" ? payload.commitHash : null,
+      changedFiles: Array.isArray(payload.changedFiles) ? payload.changedFiles.filter((item): item is string => typeof item === "string") : [],
+      fileRevisionSha256: stringValue(payload.fileRevisionSha256) || undefined,
+      objectContentSha256: stringValue(payload.objectContentSha256) || undefined,
+      message: `PKOS object write ${stringValue(payload.status) || "completed"}`,
+    });
+  }
+
   private async runReviewReadCommand(args: string[], fallbackMessage: string): Promise<ReviewCliResult> {
-    const result = await this.runRawCommand(args);
+    const result = await this.runRawCommand(args, true);
     if (result.error) {
       return result.error;
     }
@@ -768,7 +912,42 @@ export class PkosCliClient {
     if (payload.ok === false) {
       return { ok: false, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, fallbackMessage) };
     }
+    const failure = cliRunFailure(result.result);
+    if (failure) {
+      return failure;
+    }
+    if (payload.ok !== true) {
+      return { ok: false, errorCode: "cli_failed", message: "PKOS CLI returned invalid review JSON" };
+    }
     return { ok: true, payload };
+  }
+
+  private async runObjectReadCommand(args: string[], fallbackMessage: string): Promise<ObjectCliResult> {
+    const result = await this.runObjectCli(args);
+    const payload = parseCliJson("pkos.object.read", result);
+    if (payload?.ok === false) {
+      return { ok: false, errorCode: cliErrorCode(payload), message: cliErrorMessage(payload, fallbackMessage) };
+    }
+    const failure = cliRunFailure(result);
+    if (failure) {
+      return { ok: false, errorCode: failure.errorCode, message: failure.message };
+    }
+    if (!payload) {
+      return { ok: false, errorCode: "cli_failed", message: "PKOS CLI returned invalid JSON" };
+    }
+    return { ok: true, payload };
+  }
+
+  private runObjectCli(args: string[]): Promise<CliProcessRunResult> {
+    return this.runner.run({
+      executable: this.pythonBin,
+      args,
+      cwd: this.paths.coreRoot,
+      env: buildChildEnv(this.paths),
+      timeoutMs: this.timeoutMs,
+      maxStdoutBytes: MAX_OUTPUT_BYTES,
+      maxStderrBytes: MAX_OUTPUT_BYTES,
+    });
   }
 
   private async runReminderWriteCommand(operation: string, args: string[]): Promise<WritebackResult> {
@@ -834,7 +1013,7 @@ export class PkosCliClient {
     });
   }
 
-  private async runRawCommand(args: string[]): Promise<
+  private async runRawCommand(args: string[], allowDomainError = false): Promise<
     | { result: CliProcessRunResult; error?: undefined }
     | { error: { ok: false; errorCode: string; message: string }; errorResult(operation: string): WritebackResult }
   > {
@@ -848,7 +1027,9 @@ export class PkosCliClient {
       maxStderrBytes: MAX_OUTPUT_BYTES,
     });
 
-    const failure = cliRunFailure(result);
+    // Review commands emit domain-error JSON on nonzero exits; interrupted processes remain failures.
+    const inspectDomainError = allowDomainError && result.exitCode !== null && result.signal === null;
+    const failure = cliRunFailure(inspectDomainError ? { ...result, exitCode: 0 } : result);
     if (failure) {
       return {
         error: failure,
@@ -861,6 +1042,29 @@ export class PkosCliClient {
   }
 }
 
+function parseReviewBatchOutcome(payload: Record<string, unknown>): ReviewBatchOutcome | null {
+  if (!Array.isArray(payload.items) || !Array.isArray(payload.failures) || payload.items.length + payload.failures.length > 100) {
+    return null;
+  }
+  const items: ReviewBatchOutcome["items"] = [];
+  const failures: ReviewBatchOutcome["failures"] = [];
+  for (const item of payload.items) {
+    if (!isRecord(item) || !boundedReviewReference(item.objectId) || !boundedReviewReference(item.requestId) ||
+        !boundedReviewReference(item.eventId) || (item.status !== "written" && item.status !== "replayed")) return null;
+    items.push({ objectId: item.objectId, requestId: item.requestId, status: item.status, eventId: item.eventId });
+  }
+  for (const item of payload.failures) {
+    if (!isRecord(item) || !boundedReviewReference(item.objectId) || !boundedReviewReference(item.requestId) || !boundedReviewReference(item.code)) return null;
+    // Domain messages can contain object content or local paths; expose only bounded identifiers and codes.
+    failures.push({ objectId: item.objectId, requestId: item.requestId, code: item.code });
+  }
+  return { items, failures };
+}
+
+function boundedReviewReference(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= 256;
+}
+
 function parseCliJson(operation: string, result: CliProcessRunResult): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(result.stdout.trim()) as unknown;
@@ -869,7 +1073,8 @@ function parseCliJson(operation: string, result: CliProcessRunResult): Record<st
     }
     return parsed as Record<string, unknown>;
   } catch {
-    return { ok: false, operation };
+    void operation;
+    return null;
   }
 }
 

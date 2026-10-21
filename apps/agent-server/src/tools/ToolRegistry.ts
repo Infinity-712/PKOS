@@ -1,5 +1,6 @@
 import { inboxAppendTool } from "./builtin/inboxAppend.js";
 import { inboxReviewArchiveTool, inboxReviewRestoreTool } from "./builtin/inboxReview.js";
+import { objectCreateTool, objectDeleteTool, objectUpdateTool } from "./builtin/objectAuthority.js";
 import { reminderAcknowledgeTool, reminderCancelTool, reminderCreateTool, reminderRescheduleTool } from "./builtin/reminderFlow.js";
 import { reviewCorrectionTool, reviewRatingBatchTool, reviewRatingTool } from "./builtin/reviewFlow.js";
 import { stateAppendTool } from "./builtin/stateAppend.js";
@@ -48,5 +49,8 @@ export function createDefaultToolRegistry(): ToolRegistry {
   registry.register(reviewRatingTool);
   registry.register(reviewRatingBatchTool);
   registry.register(reviewCorrectionTool);
+  registry.register(objectCreateTool);
+  registry.register(objectUpdateTool);
+  registry.register(objectDeleteTool);
   return registry;
 }

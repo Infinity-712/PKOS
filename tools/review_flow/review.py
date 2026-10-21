@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from contextvars import ContextVar
 from datetime import datetime, timezone
+from functools import wraps
 import hashlib
+import inspect
 import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 from typing import Any
 
+from tools.common.data_root_lock import DataRootLockTimeout, data_root_lock
 from tools.common.object_store import ObjectRecord, build_object_index
 from tools.common.yaml_io import save_yaml
 from tools.review_flow.algorithms.sm2_v1 import (
@@ -24,6 +29,7 @@ SCHEMA_VERSION = "0.8-alpha"
 REVIEWABLE_TYPES = {"fact", "skill", "claim"}
 DEFAULT_QUEUE_LIMIT = 50
 MAX_QUEUE_LIMIT = 500
+GIT_FAILURE_MESSAGE = "Git operation failed."
 
 
 class ReviewFlowError(Exception):
@@ -40,6 +46,90 @@ class LoadedEvents:
     source_files: list[dict[str, Any]]
 
 
+@dataclass
+class _WriteTransaction:
+    root: Path
+    preimages: dict[Path, bytes | None]
+    authority_paths: set[Path]
+    appended_events: set[str]
+
+
+_transactions: ContextVar[tuple[_WriteTransaction, ...]] = ContextVar("review_transactions", default=())
+
+
+def _remember_write(path: Path, *, authority: bool = False) -> None:
+    path = path.resolve()
+    for transaction in _transactions.get():
+        if path not in transaction.preimages:
+            transaction.preimages[path] = path.read_bytes() if path.exists() else None
+        if authority:
+            transaction.authority_paths.add(path)
+
+
+def _replace_bytes(path: Path, content: bytes | None) -> None:
+    if content is None:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile("wb", dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(content)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _transactional(function):
+    signature = inspect.signature(function)
+
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        parents = _transactions.get()
+        root = bound.arguments.get("data_root")
+        if root is None:
+            root = parents[-1].root if parents else Path(bound.arguments["objects_dir"]).parent
+        root = Path(root).resolve()
+        try:
+            with data_root_lock(root):
+                if "current_path" in bound.arguments and "queue_path" in bound.arguments:
+                    _validate_projection_paths(root, bound.arguments["current_path"], bound.arguments["queue_path"])
+                transaction = _WriteTransaction(root, {}, set(), set())
+                token = _transactions.set((*parents, transaction))
+                try:
+                    return function(*args, **kwargs)
+                except BaseException as exc:
+                    for path, content in reversed(list(transaction.preimages.items())):
+                        _replace_bytes(path, content)
+                    if isinstance(exc, (OSError, subprocess.SubprocessError)):
+                        if function.__name__ == "commit_data_root" or isinstance(exc, subprocess.SubprocessError):
+                            raise ReviewFlowError("git_commit_failed", GIT_FAILURE_MESSAGE) from None
+                        raise ReviewFlowError("review_write_failed", "Review write failed.") from None
+                    raise
+                finally:
+                    _transactions.reset(token)
+        except DataRootLockTimeout as exc:
+            raise ReviewFlowError("data_root_busy", str(exc)) from exc
+
+    return wrapped
+
+
+def _validate_projection_paths(root: Path, current_path: Path, queue_path: Path) -> None:
+    allowed = root / "runtime" / "review"
+    current = current_path.resolve()
+    queue = queue_path.resolve()
+    for path in (current, queue):
+        if path.parent != allowed or path.suffix.lower() != ".json":
+            raise ReviewFlowError("invalid_projection_path", "review projections must be JSON files directly under Data Root/runtime/review")
+    if current == queue:
+        raise ReviewFlowError("invalid_projection_path", "current and queue projection paths must be distinct")
+
+
+@_transactional
 def run_rebuild(
     objects_dir: Path,
     review_dir: Path,
@@ -48,14 +138,18 @@ def run_rebuild(
     *,
     now: str | None,
     write_object_projection: bool = True,
+    projection_object_ids: set[str] | None = None,
+    data_root: Path | None = None,
 ) -> dict[str, Any]:
-    current = build_current_view(objects_dir, review_dir, now=now, write_object_projection=write_object_projection)
+    current = build_current_view(objects_dir, review_dir, now=now, write_object_projection=write_object_projection,
+                                 projection_object_ids=projection_object_ids)
     write_json(current_path, current)
     queue = build_queue_view_from_current(current, evaluated_at=now)
     write_json(queue_path, queue)
     return {"ok": True, "status": "rebuilt", **current}
 
 
+@_transactional
 def run_queue(
     objects_dir: Path,
     review_dir: Path,
@@ -64,8 +158,9 @@ def run_queue(
     *,
     now: str | None,
     limit: int | None,
+    data_root: Path | None = None,
 ) -> dict[str, Any]:
-    current = build_current_view(objects_dir, review_dir, now=now, write_object_projection=True)
+    current = build_current_view(objects_dir, review_dir, now=now, write_object_projection=False)
     write_json(current_path, current)
     queue = build_queue_view_from_current(current, evaluated_at=now, limit=limit)
     write_json(queue_path, queue)
@@ -113,6 +208,7 @@ def run_status(objects_dir: Path, review_dir: Path, *, now: str | None) -> dict[
     }
 
 
+@_transactional
 def run_rate(
     data_root: Path,
     objects_dir: Path,
@@ -127,6 +223,7 @@ def run_rate(
     request_id: str,
     commit: bool = True,
 ) -> dict[str, Any]:
+    _require_data_git(data_root)
     reviewed_at = normalize_reviewed_at(reviewed_at)
     rating = _parse_rating(rating)
     request_id = _required_string(request_id, "request_id")
@@ -138,11 +235,13 @@ def run_rate(
     existing = _find_request(loaded.events, request_id)
     if existing:
         _assert_same_payload(existing, payload_sha)
+        _assert_committed_replay(data_root, existing)
         return _replayed_result(existing)
 
+    _assert_committed_logs(data_root, loaded)
     index, issues = build_object_index(objects_dir)
     if issues:
-        raise ReviewFlowError("object_load_failed", "; ".join(issue.format() for issue in issues))
+        raise ReviewFlowError("object_load_failed", "Object files could not be loaded.")
     record = index.get(object_id)
     if not record:
         raise ReviewFlowError("object_not_found", f"object not found: {object_id}")
@@ -152,6 +251,11 @@ def run_rate(
     current = build_current_view(objects_dir, review_dir, now=reviewed_at, write_object_projection=False)
     current_item = _find_current_item(current, object_id)
     previous = normalize_state(current_item if current_item else _state_from_object(record))
+    ratings = [event for event in loaded.events if event.get("type") == "review_rating" and event.get("objectId") == object_id]
+    # Corrections retain their target's chronological slot, including undo.
+    latest_reviewed_at = ratings[-1]["reviewedAt"] if ratings else previous["lastReviewedAt"]
+    if latest_reviewed_at and _parse_dt(reviewed_at) < _parse_dt(latest_reviewed_at):
+        raise ReviewFlowError("review_time_regression", "new rating time must not precede the object's latest rating; use a correction for an existing event")
     resulting = apply_rating(previous, rating, reviewed_at)
     object_hash = object_content_hash(record)
     event = {
@@ -174,7 +278,8 @@ def run_rate(
     }
 
     log_path = _append_event(review_dir, reviewed_at, event)
-    current = build_current_view(objects_dir, review_dir, now=reviewed_at, write_object_projection=True)
+    current = build_current_view(objects_dir, review_dir, now=reviewed_at, write_object_projection=True,
+                                 projection_object_ids={object_id})
     write_json(current_path, current)
     queue = build_queue_view_from_current(current, evaluated_at=reviewed_at)
     write_json(queue_path, queue)
@@ -189,6 +294,7 @@ def run_rate(
     }
 
 
+@_transactional
 def run_rate_batch(
     data_root: Path,
     objects_dir: Path,
@@ -201,6 +307,9 @@ def run_rate_batch(
     actor: str,
     request_id: str,
 ) -> dict[str, Any]:
+    _require_data_git(data_root)
+    if not isinstance(items, list):
+        raise ReviewFlowError("invalid_items_json", "items must be a JSON array")
     request_id = _required_string(request_id, "request_id")
     reviewed_at = normalize_reviewed_at(reviewed_at)
     actor = _required_string(actor, "actor")
@@ -209,7 +318,10 @@ def run_rate_batch(
     changed_paths: list[Path] = []
     loaded_before = _all_log_bytes(review_dir)
 
-    for item in items:
+    for position, item in enumerate(items):
+        if not isinstance(item, dict):
+            failures.append({"objectId": "", "code": "invalid_batch_item", "message": f"items[{position}] must be an object", "requestId": ""})
+            continue
         object_id = str(item.get("objectId", item.get("id", ""))).strip()
         item_request_id = _batch_item_request_id(request_id, object_id)
         try:
@@ -231,19 +343,10 @@ def run_rate_batch(
             changed_paths.extend(_paths_changed_since(review_dir, loaded_before))
             loaded_before = _all_log_bytes(review_dir)
         except ReviewFlowError as exc:
+            if exc.code == "review_recovery_required":
+                raise
             failures.append({"objectId": object_id, "code": exc.code, "message": exc.message, "requestId": item_request_id})
 
-    current = build_current_view(objects_dir, review_dir, now=reviewed_at, write_object_projection=True)
-    write_json(current_path, current)
-    queue = build_queue_view_from_current(current, evaluated_at=reviewed_at)
-    write_json(queue_path, queue)
-    for item in results:
-        current_item = _find_current_item(current, item["objectId"])
-        if current_item:
-            record = build_object_index(objects_dir)[0].get(item["objectId"])
-            if record:
-                changed_paths.append(record.path)
-    changed_paths.extend([current_path, queue_path])
     wrote_any = any(item.get("status") == "written" for item in results)
     if wrote_any:
         git_result = commit_data_root(data_root, _unique_paths(changed_paths), f"review: ratings batch (n={len(results)})")
@@ -259,6 +362,7 @@ def run_rate_batch(
     }
 
 
+@_transactional
 def run_correct(
     data_root: Path,
     objects_dir: Path,
@@ -273,6 +377,7 @@ def run_correct(
     request_id: str,
     created_at: str | None = None,
 ) -> dict[str, Any]:
+    _require_data_git(data_root)
     target_event_id = _required_string(target_event_id, "target_event_id")
     request_id = _required_string(request_id, "request_id")
     reason = _required_string(reason, "reason")
@@ -280,12 +385,6 @@ def run_correct(
     if corrected_rating is not None:
         corrected_rating = _parse_rating(corrected_rating)
     loaded = load_review_events(review_dir)
-    target = _find_event_by_id(loaded.events, target_event_id)
-    if not target or target.get("type") != "review_rating":
-        raise ReviewFlowError("target_event_not_found", f"review rating event not found: {target_event_id}")
-    if not _is_latest_rating(loaded.events, target):
-        raise ReviewFlowError("correction_target_not_latest", "MVP only allows correcting the latest effective rating")
-    created_at = normalize_reviewed_at(created_at or _now_iso())
     normalized_payload = {
         "operation": "review-correct",
         "targetEventId": target_event_id,
@@ -298,7 +397,16 @@ def run_correct(
     existing = _find_request(loaded.events, request_id)
     if existing:
         _assert_same_payload(existing, payload_sha)
+        _assert_committed_replay(data_root, existing)
         return _replayed_result(existing)
+
+    _assert_committed_logs(data_root, loaded)
+    target = _find_event_by_id(loaded.events, target_event_id)
+    if not target or target.get("type") != "review_rating":
+        raise ReviewFlowError("target_event_not_found", f"review rating event not found: {target_event_id}")
+    if not _is_latest_rating(loaded.events, target):
+        raise ReviewFlowError("correction_target_not_latest", "MVP only allows correcting the latest effective rating")
+    created_at = normalize_reviewed_at(created_at or _now_iso())
 
     event = {
         "schemaVersion": SCHEMA_VERSION,
@@ -320,7 +428,8 @@ def run_correct(
         event["correctedResultingState"] = apply_rating(target.get("previousState"), corrected_rating, str(target.get("reviewedAt")))
 
     log_path = _append_event(review_dir, created_at, event)
-    current = build_current_view(objects_dir, review_dir, now=created_at, write_object_projection=True)
+    current = build_current_view(objects_dir, review_dir, now=created_at, write_object_projection=True,
+                                 projection_object_ids={str(target.get("objectId") or "")})
     write_json(current_path, current)
     queue = build_queue_view_from_current(current, evaluated_at=created_at)
     write_json(queue_path, queue)
@@ -338,17 +447,19 @@ def run_correct(
     }
 
 
+@_transactional
 def build_current_view(
     objects_dir: Path,
     review_dir: Path,
     *,
     now: str | None,
     write_object_projection: bool,
+    projection_object_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     generated_at = normalize_reviewed_at(now) if now else _now_iso()
     index, issues = build_object_index(objects_dir)
     if issues:
-        raise ReviewFlowError("object_load_failed", "; ".join(issue.format() for issue in issues))
+        raise ReviewFlowError("object_load_failed", "Object files could not be loaded.")
     loaded = load_review_events(review_dir)
     events_by_object: dict[str, list[dict[str, Any]]] = {}
     legacy_by_object: dict[str, list[dict[str, Any]]] = {}
@@ -374,7 +485,7 @@ def build_current_view(
         items.append(item)
         if legacy_warning:
             warnings.append({"code": "legacy_unverified", "objectId": object_id})
-        if write_object_projection:
+        if write_object_projection and (projection_object_ids is None or record.object_id in projection_object_ids):
             _write_object_srs_projection(record, item)
 
     for object_id, rating_events in sorted(events_by_object.items()):
@@ -490,10 +601,10 @@ def load_review_events(review_dir: Path) -> LoadedEvents:
                 continue
             try:
                 row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ReviewFlowError("malformed_review_log", f"{path.as_posix()}:{line_no}: {exc.msg}") from exc
+            except json.JSONDecodeError:
+                raise ReviewFlowError("malformed_review_log", f"review/logs/{path.name}:{line_no}: invalid JSON") from None
             if not isinstance(row, dict):
-                raise ReviewFlowError("malformed_review_log", f"{path.as_posix()}:{line_no}: row must be an object")
+                raise ReviewFlowError("malformed_review_log", f"review/logs/{path.name}:{line_no}: row must be an object")
             event = _normalize_event_row(row)
             event["_sourcePath"] = path.as_posix()
             event["_sourceLine"] = line_no
@@ -508,39 +619,75 @@ def object_content_hash(record: ObjectRecord) -> str:
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    _remember_write(path)
+    _replace_bytes(path, (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8"))
 
 
+@_transactional
 def commit_data_root(data_root: Path, changed_paths: list[Path], message: str) -> dict[str, Any]:
-    git_root = _git_root(data_root)
-    if git_root is None:
-        return no_git_result("PKOS_DATA_ROOT is not a git repository")
+    git_root = _require_data_git(data_root)
     data_root = data_root.resolve()
     git_root = git_root.resolve()
-    if git_root != data_root and data_root not in git_root.parents:
-        return no_git_result("PKOS_DATA_ROOT git root is outside data root")
+    transactions = _transactions.get()
+    # Runtime caches never belong in an authority commit, including when ignored.
+    if len(transactions) > 1:
+        paths = sorted(set().union(*(transaction.authority_paths for transaction in transactions)), key=str)
+    else:
+        paths = [path for path in changed_paths if not _is_relative_to(path.resolve(), data_root / "runtime")]
     rels: list[str] = []
-    for path in _unique_paths(changed_paths):
+    for path in _unique_paths(paths):
         resolved = path.resolve()
         if not _is_relative_to(resolved, git_root):
-            return no_git_result(f"changed path is outside data root git repository: {path.as_posix()}")
+            raise ReviewFlowError("git_path_outside_data_root", "changed authority path is outside Data Root")
         if resolved.exists():
             rels.append(resolved.relative_to(git_root).as_posix())
     if not rels:
         return no_git_result("no changed paths to commit")
-    subprocess.run(["git", "-C", str(git_root), "add", "--", *rels], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    diff = subprocess.run(["git", "-C", str(git_root), "diff", "--cached", "--quiet"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    diff = _git(git_root, "diff", "--cached", "--quiet", check=False)
+    if diff.returncode == 1:
+        raise ReviewFlowError("data_root_staged_changes", "Data Root has pre-existing staged changes")
+    if diff.returncode != 0:
+        raise ReviewFlowError("git_commit_failed", GIT_FAILURE_MESSAGE)
+    index_path = Path(_git(git_root, "rev-parse", "--git-path", "index").stdout.strip())
+    if not index_path.is_absolute():
+        index_path = git_root / index_path
+    _remember_write(index_path)
+    try:
+        _git(git_root, "add", "--", *rels)
+        diff = _git(git_root, "diff", "--cached", "--quiet", check=False)
+        if diff.returncode not in (0, 1):
+            raise ReviewFlowError("git_commit_failed", GIT_FAILURE_MESSAGE)
+        staged = _git(git_root, "diff", "--cached", "--name-only", "-z").stdout.split("\0")
+        staged = [path for path in staged if path]
+        if set(staged) - set(rels):
+            raise ReviewFlowError("data_root_staged_changes", "Git index contains unrelated staged changes")
+        if diff.returncode != 0:
+            _git(git_root, "commit", "--only", "-m", message, "--", *rels)
+    except (OSError, subprocess.SubprocessError):
+        raise ReviewFlowError("git_commit_failed", GIT_FAILURE_MESSAGE) from None
     if diff.returncode == 0:
         return no_git_result("no staged review changes")
-    subprocess.run(["git", "-C", str(git_root), "commit", "-m", message], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    commit_hash = subprocess.run(["git", "-C", str(git_root), "rev-parse", "HEAD"], check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
+    # A metadata lookup failure must not roll back an already accepted commit.
+    warnings = []
+    try:
+        commit_hash = _git(git_root, "rev-parse", "HEAD").stdout.strip()
+    except (OSError, subprocess.SubprocessError, ReviewFlowError):
+        commit_hash = None
+        warnings.append({"code": "git_commit_hash_unavailable", "message": "commit succeeded but HEAD lookup failed"})
     return {
         "gitCommitCreated": True,
         "commitHash": commit_hash,
-        "changedFiles": rels,
-        "warnings": [],
+        "changedFiles": staged,
+        "warnings": warnings,
     }
+
+
+def _git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(["git", "-C", str(root), *args], check=check, stdout=subprocess.PIPE,
+                              stderr=subprocess.PIPE, text=True, encoding="utf-8")
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        raise ReviewFlowError("git_commit_failed", GIT_FAILURE_MESSAGE) from None
 
 
 def no_git_result(message: str) -> dict[str, Any]:
@@ -662,7 +809,7 @@ def _state_from_object(record: ObjectRecord) -> dict[str, Any]:
 
 
 def _write_object_srs_projection(record: ObjectRecord, item: dict[str, Any]) -> None:
-    record.data["srs"] = {
+    projection = {
         "due_at": item["dueAt"],
         "interval_days": item["intervalDays"],
         "ease": item["easeFactor"],
@@ -673,9 +820,13 @@ def _write_object_srs_projection(record: ObjectRecord, item: dict[str, Any]) -> 
         "source_event_id": item.get("lastReviewEventId"),
         "projection_schema_version": SCHEMA_VERSION,
     }
+    if record.data.get("srs") == projection:
+        return
+    _remember_write(record.path, authority=True)
+    record.data["srs"] = projection
     issues = save_yaml(record.path, record.data)
     if issues:
-        raise ReviewFlowError("object_projection_write_failed", "; ".join(issue.format() for issue in issues))
+        raise ReviewFlowError("object_projection_write_failed", "Object SRS projection could not be written.")
 
 
 def _queue_item(item: dict[str, Any], evaluated_dt: datetime) -> dict[str, Any]:
@@ -700,9 +851,12 @@ def _queue_item(item: dict[str, Any], evaluated_dt: datetime) -> dict[str, Any]:
 def _append_event(review_dir: Path, timestamp: str, event: dict[str, Any]) -> Path:
     date = normalize_reviewed_at(timestamp)[:10]
     path = review_dir / "logs" / f"{date}.jsonl"
+    _remember_write(path, authority=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as f:
         f.write(json.dumps(event, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n")
+    for transaction in _transactions.get():
+        transaction.appended_events.add(stable_sha256(event))
     return path
 
 
@@ -763,6 +917,55 @@ def _assert_same_payload(existing: dict[str, Any], payload_sha: str) -> None:
         raise ReviewFlowError("idempotency_conflict", "requestId was already used with a different review payload")
 
 
+def _assert_committed_replay(data_root: Path, event: dict[str, Any]) -> None:
+    authority = {key: value for key, value in event.items() if key not in {"_sourcePath", "_sourceLine"}}
+    event_hash = stable_sha256(authority)
+    if any(event_hash in transaction.appended_events for transaction in _transactions.get()):
+        return
+    git_root = _git_root(data_root)
+    if git_root is None:
+        return
+    message = "review event is not confirmed in Data Root HEAD; explicit recovery is required before retry"
+    if git_root.resolve() != data_root.resolve():
+        raise ReviewFlowError("review_recovery_required", message)
+    source = Path(str(event.get("_sourcePath") or "")).resolve()
+    if not _is_relative_to(source, git_root.resolve()):
+        raise ReviewFlowError("review_recovery_required", message)
+    relative = source.relative_to(git_root.resolve()).as_posix()
+    try:
+        committed = _git(git_root, "show", f"HEAD:{relative}")
+        for line in committed.stdout.splitlines():
+            if line.strip() and stable_sha256(json.loads(line)) == event_hash:
+                return
+    except (OSError, subprocess.SubprocessError, ValueError, ReviewFlowError):
+        pass
+    raise ReviewFlowError("review_recovery_required", message)
+
+
+def _assert_committed_logs(data_root: Path, loaded: LoadedEvents) -> None:
+    in_flight = set().union(*(transaction.authority_paths for transaction in _transactions.get()))
+    paths = [Path(source["path"]).resolve() for source in loaded.source_files]
+    paths = [path for path in paths if path not in in_flight]
+    if not paths:
+        return
+    git_root = _git_root(data_root)
+    if git_root is None:
+        return
+    root = data_root.resolve()
+    message = "review logs contain uncommitted changes; explicit recovery is required before writing"
+    if git_root.resolve() != root or any(not _is_relative_to(path, root) for path in paths):
+        raise ReviewFlowError("review_recovery_required", message)
+    rels = [path.relative_to(root).as_posix() for path in paths]
+    try:
+        _git(root, "ls-files", "--error-unmatch", "--", *rels)
+        result = _git(root, "diff", "--quiet", "HEAD", "--", *rels, check=False)
+        if result.returncode == 0:
+            return
+    except (OSError, subprocess.SubprocessError, ReviewFlowError):
+        pass
+    raise ReviewFlowError("review_recovery_required", message)
+
+
 def _replayed_result(existing: dict[str, Any]) -> dict[str, Any]:
     return {
         "ok": True,
@@ -778,13 +981,9 @@ def _sanitize_history_event(event: dict[str, Any]) -> dict[str, Any]:
 
 
 def _parse_rating(value: Any) -> int:
-    try:
-        rating = int(value)
-    except Exception as exc:
-        raise ReviewFlowError("invalid_rating", "rating must be an integer from 1 to 5") from exc
-    if rating not in RATING_LABELS:
+    if type(value) is not int or value not in RATING_LABELS:
         raise ReviewFlowError("invalid_rating", "rating must be an integer from 1 to 5")
-    return rating
+    return value
 
 
 def _required_string(value: Any, field: str) -> str:
@@ -843,6 +1042,13 @@ def _unique_paths(paths: list[Path]) -> list[Path]:
         seen.add(key)
         result.append(path)
     return result
+
+
+def _require_data_git(data_root: Path) -> Path:
+    root = _git_root(data_root)
+    if root is None or root.resolve() != data_root.resolve():
+        raise ReviewFlowError("data_root_git_required", "Review writes require a Git working tree rooted exactly at PKOS_DATA_ROOT")
+    return root.resolve()
 
 
 def _git_root(data_root: Path) -> Path | None:

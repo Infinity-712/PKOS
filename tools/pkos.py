@@ -62,6 +62,18 @@ from tools.inbox_review.review import (
     run_list as run_inbox_review_list,
     run_mark as run_inbox_review_mark,
 )
+from tools.object_flow import (
+    ObjectFlowError,
+    run_create as run_object_create,
+    run_delete as run_object_delete,
+    run_delete_preflight as run_object_delete_preflight,
+    run_get as run_object_get,
+    run_list as run_object_list,
+    run_rebuild as run_object_rebuild,
+    run_render as run_object_render,
+    run_type_contracts as run_object_type_contracts,
+    run_update as run_object_update,
+)
 from tools.reminder_flow.reminders import (
     STATUSES as REMINDER_STATUSES,
     ReminderFlowError,
@@ -125,6 +137,15 @@ COMMAND_NAMES = {
     "review-queue",
     "review-correct",
     "review-status",
+    "object-types",
+    "object-list",
+    "object-get",
+    "object-render",
+    "object-create",
+    "object-update",
+    "object-delete-preflight",
+    "object-delete",
+    "object-rebuild",
     "task-create",
     "task-list",
     "task-transition",
@@ -523,6 +544,97 @@ def main() -> int:
     review_correct.add_argument("--queue-path", **review_common_paths["--queue-path"])
     review_correct.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
 
+    object_common_paths = {
+        "--objects-dir": {"default": "objects", "help": "Objects authority directory"},
+        "--review-dir": {"default": "review", "help": "Review authority directory"},
+        "--schema-dir": {"default": "tools/schema", "help": "Core object schema directory"},
+        "--index-path": {"default": "runtime/objects/index.json", "help": "Object runtime index projection path"},
+        "--current-path": {"default": "runtime/review/current.json", "help": "Review current projection path"},
+        "--queue-path": {"default": "runtime/review/queue.json", "help": "Review queue projection path"},
+    }
+
+    object_types = subparsers.add_parser("object-types", help="Show supported object form contracts")
+    object_types.add_argument("--schema-dir", **object_common_paths["--schema-dir"])
+    object_types.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_list = subparsers.add_parser("object-list", help="List PKOS authority objects")
+    object_list.add_argument("--type", default=None, dest="object_type")
+    object_list.add_argument("--status", default=None)
+    object_list.add_argument("--q", default=None)
+    object_list.add_argument("--limit", type=int, default=None)
+    object_list.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_list.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_list.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_get = subparsers.add_parser("object-get", help="Get one PKOS authority object")
+    object_get.add_argument("--object-id", required=True)
+    object_get.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_get.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_get.add_argument("--schema-dir", **object_common_paths["--schema-dir"])
+    object_get.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_render = subparsers.add_parser("object-render", help="Render one PKOS object body and sections")
+    object_render.add_argument("--object-id", required=True)
+    object_render.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_render.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_render.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_create = subparsers.add_parser("object-create", help="Create one PKOS authority object with Git commit")
+    object_create.add_argument("--payload-json", required=True)
+    object_create.add_argument("--actor", required=True)
+    object_create.add_argument("--request-id", required=True)
+    object_create.add_argument("--confirmed", action="store_true")
+    object_create.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_create.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_create.add_argument("--schema-dir", **object_common_paths["--schema-dir"])
+    object_create.add_argument("--index-path", **object_common_paths["--index-path"])
+    object_create.add_argument("--current-path", **object_common_paths["--current-path"])
+    object_create.add_argument("--queue-path", **object_common_paths["--queue-path"])
+    object_create.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_update = subparsers.add_parser("object-update", help="Update editable PKOS object fields with baseRevision")
+    object_update.add_argument("--object-id", required=True)
+    object_update.add_argument("--patch-json", required=True)
+    object_update.add_argument("--base-revision", required=True)
+    object_update.add_argument("--actor", required=True)
+    object_update.add_argument("--request-id", required=True)
+    object_update.add_argument("--confirmed", action="store_true")
+    object_update.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_update.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_update.add_argument("--schema-dir", **object_common_paths["--schema-dir"])
+    object_update.add_argument("--index-path", **object_common_paths["--index-path"])
+    object_update.add_argument("--current-path", **object_common_paths["--current-path"])
+    object_update.add_argument("--queue-path", **object_common_paths["--queue-path"])
+    object_update.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_delete_preflight = subparsers.add_parser("object-delete-preflight", help="Scan object references before hard delete")
+    object_delete_preflight.add_argument("--object-id", required=True)
+    object_delete_preflight.add_argument("--base-revision", default=None)
+    object_delete_preflight.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_delete_preflight.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_delete_preflight.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_delete = subparsers.add_parser("object-delete", help="Hard delete one PKOS object with tombstone and Git commit")
+    object_delete.add_argument("--object-id", required=True)
+    object_delete.add_argument("--typed-object-id", required=True)
+    object_delete.add_argument("--base-revision", required=True)
+    object_delete.add_argument("--reason", required=True)
+    object_delete.add_argument("--actor", required=True)
+    object_delete.add_argument("--request-id", required=True)
+    object_delete.add_argument("--confirmed", action="store_true")
+    object_delete.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_delete.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_delete.add_argument("--index-path", **object_common_paths["--index-path"])
+    object_delete.add_argument("--current-path", **object_common_paths["--current-path"])
+    object_delete.add_argument("--queue-path", **object_common_paths["--queue-path"])
+    object_delete.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
+    object_rebuild = subparsers.add_parser("object-rebuild", help="Rebuild object runtime index projection")
+    object_rebuild.add_argument("--objects-dir", **object_common_paths["--objects-dir"])
+    object_rebuild.add_argument("--review-dir", **object_common_paths["--review-dir"])
+    object_rebuild.add_argument("--index-path", **object_common_paths["--index-path"])
+    object_rebuild.add_argument("--json", action="store_true", dest="json_output", help="Print machine-readable JSON")
+
     task_create = subparsers.add_parser("task-create", help="Append a formal Task creation record")
     task_create.add_argument("--title", required=True)
     task_create.add_argument("--description", default=None)
@@ -869,6 +981,131 @@ def main() -> int:
             return 0
 
     if args.command in {
+        "object-types",
+        "object-list",
+        "object-get",
+        "object-render",
+        "object-create",
+        "object-update",
+        "object-delete-preflight",
+        "object-delete",
+        "object-rebuild",
+    }:
+        try:
+            objects_dir = resolve_data_path(args.objects_dir) if hasattr(args, "objects_dir") else resolve_data_path("objects")
+            review_dir = resolve_data_path(args.review_dir) if hasattr(args, "review_dir") else resolve_data_path("review")
+            schema_dir = resolve_core_path(args.schema_dir) if hasattr(args, "schema_dir") else resolve_core_path("tools/schema")
+            index_path = resolve_data_path(args.index_path) if hasattr(args, "index_path") else resolve_data_path("runtime/objects/index.json")
+            current_path = resolve_data_path(args.current_path) if hasattr(args, "current_path") else resolve_data_path("runtime/review/current.json")
+            queue_path = resolve_data_path(args.queue_path) if hasattr(args, "queue_path") else resolve_data_path("runtime/review/queue.json")
+
+            if args.command == "object-types":
+                payload = run_object_type_contracts(schema_dir)
+            elif args.command == "object-list":
+                payload = run_object_list(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    object_type=args.object_type,
+                    status=args.status,
+                    q=args.q,
+                    limit=args.limit,
+                )
+            elif args.command == "object-get":
+                payload = run_object_get(get_data_root(), objects_dir, review_dir, schema_dir, args.object_id)
+            elif args.command == "object-render":
+                payload = run_object_render(get_data_root(), objects_dir, review_dir, args.object_id)
+            elif args.command == "object-rebuild":
+                payload = run_object_rebuild(get_data_root(), objects_dir, review_dir, index_path)
+            elif args.command == "object-create":
+                try:
+                    object_payload = json.loads(args.payload_json)
+                except json.JSONDecodeError as exc:
+                    raise ObjectFlowError("invalid_json", f"payload-json must be valid JSON: {exc.msg}") from exc
+                if not isinstance(object_payload, dict):
+                    raise ObjectFlowError("invalid_json", "payload-json must be a JSON object")
+                payload = run_object_create(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    schema_dir,
+                    index_path,
+                    current_path,
+                    queue_path,
+                    payload=object_payload,
+                    actor=args.actor,
+                    request_id=args.request_id,
+                    confirmed=args.confirmed,
+                )
+            elif args.command == "object-update":
+                try:
+                    patch_payload = json.loads(args.patch_json)
+                except json.JSONDecodeError as exc:
+                    raise ObjectFlowError("invalid_json", f"patch-json must be valid JSON: {exc.msg}") from exc
+                if not isinstance(patch_payload, dict):
+                    raise ObjectFlowError("invalid_json", "patch-json must be a JSON object")
+                payload = run_object_update(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    schema_dir,
+                    index_path,
+                    current_path,
+                    queue_path,
+                    object_id=args.object_id,
+                    patch=patch_payload,
+                    base_revision=args.base_revision,
+                    actor=args.actor,
+                    request_id=args.request_id,
+                    confirmed=args.confirmed,
+                )
+            elif args.command == "object-delete-preflight":
+                payload = run_object_delete_preflight(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    object_id=args.object_id,
+                    base_revision=args.base_revision,
+                )
+            else:
+                payload = run_object_delete(
+                    get_data_root(),
+                    objects_dir,
+                    review_dir,
+                    index_path,
+                    current_path,
+                    queue_path,
+                    object_id=args.object_id,
+                    typed_object_id=args.typed_object_id,
+                    base_revision=args.base_revision,
+                    reason=args.reason,
+                    actor=args.actor,
+                    request_id=args.request_id,
+                    confirmed=args.confirmed,
+                )
+        except ObjectFlowError as exc:
+            if args.json_output:
+                _print_json(_json_error(exc.code, exc.message))
+                return 1
+            print(f"ERROR [{exc.code}]: {exc.message}")
+            return 1
+
+        if args.json_output:
+            _print_json(payload)
+        elif args.command == "object-list":
+            print(f"count: {payload['count']}")
+            for item in payload["items"]:
+                print(f"{item['id']} | {item['type']} | {item['status']} | {item['title']}")
+        elif args.command == "object-types":
+            for item in payload["types"]:
+                print(f"{item['type']}: {', '.join(item['statusEnum'])}")
+        elif args.command == "object-render":
+            print(payload.get("body", ""))
+        else:
+            print(f"{payload.get('status', 'ok')}: {payload.get('objectId', '')}")
+        return 0
+
+    if args.command in {
         "review-rebuild",
         "review-queue",
         "review-list",
@@ -885,9 +1122,9 @@ def main() -> int:
         queue_path = resolve_data_path(args.queue_path) if hasattr(args, "queue_path") else resolve_data_path("runtime/review/queue.json")
         try:
             if args.command == "review-rebuild":
-                payload = run_review_rebuild(objects_dir, review_dir, current_path, queue_path, now=args.now)
+                payload = run_review_rebuild(objects_dir, review_dir, current_path, queue_path, now=args.now, data_root=get_data_root())
             elif args.command in {"review-queue", "review-list"}:
-                payload = run_review_queue(objects_dir, review_dir, current_path, queue_path, now=args.now, limit=args.limit)
+                payload = run_review_queue(objects_dir, review_dir, current_path, queue_path, now=args.now, limit=args.limit, data_root=get_data_root())
             elif args.command == "review-get":
                 payload = run_review_get(objects_dir, review_dir, args.object_id, now=args.now)
             elif args.command == "review-history":

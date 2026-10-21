@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 
 export const allowedCorsOrigins = new Set(["http://127.0.0.1:5173", "pkos-desktop://app"]);
 
-const allowedMethods = "GET,POST,OPTIONS";
+const allowedMethods = "GET,POST,PUT,OPTIONS";
 const allowedHeaders = "Content-Type";
 const exposedHeaders = "X-PKOS-Received-Origin";
 

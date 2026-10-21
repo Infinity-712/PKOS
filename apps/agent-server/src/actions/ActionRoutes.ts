@@ -22,6 +22,7 @@ type ActionRouteDeps = {
 type ActionConfig = {
   actionName: string;
   toolName: string;
+  method?: "POST" | "PUT";
   pathname?: string;
   match?: (pathname: string) => Record<string, string> | null;
   allowedFields: Set<string>;
@@ -153,6 +154,28 @@ const ACTIONS: ActionConfig[] = [
     allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "targetEventId", "correctedRating", "reason", "actor"]),
     normalize: normalizeReviewCorrection,
   },
+  {
+    actionName: "pkos.object.create",
+    toolName: "pkos.object.create",
+    pathname: "/api/pkos/objects",
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "actor", "object"]),
+    normalize: normalizeObjectCreate,
+  },
+  {
+    actionName: "pkos.object.update",
+    toolName: "pkos.object.update",
+    method: "PUT",
+    match: matchObjectUpdate,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "actor", "baseRevision", "patch"]),
+    normalize: normalizeObjectUpdate,
+  },
+  {
+    actionName: "pkos.object.delete",
+    toolName: "pkos.object.delete",
+    match: matchObjectDelete,
+    allowedFields: new Set(["requestId", "sessionId", "sourceMessageId", "confirmed", "actor", "typedObjectId", "baseRevision", "reason"]),
+    normalize: normalizeObjectDelete,
+  },
 ];
 
 export async function handleActionRoutes(req: IncomingMessage, res: ServerResponse, deps: ActionRouteDeps): Promise<boolean> {
@@ -225,7 +248,7 @@ export async function handleActionRoutes(req: IncomingMessage, res: ServerRespon
   }
   const { config, routeParams } = matched;
 
-  if (req.method !== "POST") {
+  if (req.method !== (config.method ?? "POST")) {
     sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "route not found" } });
     return true;
   }
@@ -564,6 +587,50 @@ function normalizeReviewCorrection(input: Record<string, unknown>): ActionReques
   };
 }
 
+function normalizeObjectCreate(input: Record<string, unknown>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      actor: limitedString(input.actor, "actor", { required: false, maxChars: MAX_REFERENCE_CHARS }) ?? "human",
+      object: normalizePlainRecord(input.object, "object"),
+    },
+  };
+}
+
+function normalizeObjectUpdate(input: Record<string, unknown>, routeParams: Record<string, string>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      objectId: routeParams.objectId,
+      baseRevision: limitedString(input.baseRevision, "baseRevision", { required: true, maxChars: 64 }),
+      patch: normalizePlainRecord(input.patch, "patch"),
+      actor: limitedString(input.actor, "actor", { required: false, maxChars: MAX_REFERENCE_CHARS }) ?? "human",
+    },
+  };
+}
+
+function normalizeObjectDelete(input: Record<string, unknown>, routeParams: Record<string, string>): ActionRequest {
+  const base = normalizeBase(input);
+  return {
+    ...base,
+    confirmed: input.confirmed === true,
+    toolInput: {
+      requestId: base.requestId,
+      objectId: routeParams.objectId,
+      typedObjectId: limitedString(input.typedObjectId, "typedObjectId", { required: true, maxChars: MAX_REFERENCE_CHARS }),
+      baseRevision: limitedString(input.baseRevision, "baseRevision", { required: true, maxChars: 64 }),
+      reason: limitedString(input.reason, "reason", { required: true, maxChars: MAX_REASON_CHARS }),
+      actor: limitedString(input.actor, "actor", { required: false, maxChars: MAX_REFERENCE_CHARS }) ?? "human",
+    },
+  };
+}
+
 function normalizeBase(input: Record<string, unknown>): Omit<ActionRequest, "toolInput"> {
   const requestId = limitedString(input.requestId, "requestId", { required: true, maxChars: MAX_REQUEST_ID_CHARS });
   return {
@@ -574,11 +641,10 @@ function normalizeBase(input: Record<string, unknown>): Omit<ActionRequest, "too
 }
 
 function normalizeRating(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 5) {
     throw new ActionInputError("invalid_rating", "rating must be an integer from 1 to 5");
   }
-  return parsed;
+  return value;
 }
 
 function normalizeRatingItems(value: unknown): Array<{ objectId: string; rating: number }> {
@@ -672,6 +738,14 @@ function normalizeMetadata(value: unknown): Record<string, unknown> {
   return value;
 }
 
+function normalizePlainRecord(value: unknown, field: string): Record<string, unknown> {
+  if (!isPlainRecord(value)) {
+    throw new ActionInputError("invalid_input", `${field} must be an object`);
+  }
+  assertNoForbiddenKeys(value);
+  return value;
+}
+
 function limitedString(value: unknown, field: string, options: { required: true; maxChars: number }): string;
 function limitedString(value: unknown, field: string, options: { required: false; maxChars: number }): string | undefined;
 function limitedString(
@@ -740,6 +814,7 @@ function statusForResult(result: WritebackResult): number {
   if (
     result.errorCode === "invalid_transition" ||
     result.errorCode === "invalid_status" ||
+    result.errorCode === "invalid_status_transition" ||
     result.errorCode === "invalid_due_at" ||
     result.errorCode === "invalid_remind_at" ||
     result.errorCode === "invalid_reviewed_at" ||
@@ -755,11 +830,31 @@ function statusForResult(result: WritebackResult): number {
     result.errorCode === "target_event_not_found" ||
     result.errorCode === "correction_target_not_latest" ||
     result.errorCode === "invalid_items_json" ||
-    result.errorCode === "no_successful_review_items"
+    result.errorCode === "no_successful_review_items" ||
+    result.errorCode === "invalid_object_id" ||
+    result.errorCode === "invalid_object_field" ||
+    result.errorCode === "invalid_object_type" ||
+    result.errorCode === "object_id_type_mismatch" ||
+    result.errorCode === "object_id_exists" ||
+    result.errorCode === "object_id_tombstoned" ||
+    result.errorCode === "immutable_field" ||
+    result.errorCode === "unknown_field" ||
+    result.errorCode === "schema_validation_failed" ||
+    result.errorCode === "unsafe_projection_path" ||
+    result.errorCode === "typed_object_id_mismatch" ||
+    result.errorCode === "invalid_reason" ||
+    result.errorCode === "deletion_blocked" ||
+    result.errorCode === "invalid_revision"
   ) {
     return 400;
   }
-  if (result.errorCode === "idempotency_conflict") {
+  if (
+    result.errorCode === "idempotency_conflict" || result.errorCode === "object_revision_conflict" ||
+    result.errorCode === "data_root_dirty" || result.errorCode === "object_log_invalid" ||
+    result.errorCode === "object_transaction_incomplete" || result.errorCode === "data_root_busy" ||
+    result.errorCode === "review_recovery_required" || result.errorCode === "review_time_regression" ||
+    result.errorCode === "data_root_git_required"
+  ) {
     return 409;
   }
   if (result.errorCode === "timeout") {
@@ -890,4 +985,14 @@ function matchReminderCancel(pathname: string): Record<string, string> | null {
 function matchReminderReschedule(pathname: string): Record<string, string> | null {
   const match = /^\/api\/pkos\/reminders\/([^/]+)\/reschedule$/.exec(pathname);
   return match ? { reminderId: decodeURIComponent(match[1]) } : null;
+}
+
+function matchObjectUpdate(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/objects\/([^/]+)$/.exec(pathname);
+  return match ? { objectId: decodeURIComponent(match[1]) } : null;
+}
+
+function matchObjectDelete(pathname: string): Record<string, string> | null {
+  const match = /^\/api\/pkos\/objects\/([^/]+)\/delete$/.exec(pathname);
+  return match ? { objectId: decodeURIComponent(match[1]) } : null;
 }

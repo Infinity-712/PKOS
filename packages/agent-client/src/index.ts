@@ -1,4 +1,4 @@
-export { AgentApiClient, AgentApiClientError, getJson, postJson, resolveAgentApiUrl, type AgentApiClientOptions } from "./AgentApiClient.js";
+export { AgentApiClient, AgentApiClientError, getJson, postJson, putJson, resolveAgentApiUrl, type AgentApiClientOptions } from "./AgentApiClient.js";
 export { NdjsonParseError, parseNdjsonStream } from "./NdjsonStreamParser.js";
 export { formatDateTime } from "./time.js";
 export {
@@ -34,6 +34,11 @@ export {
   isChatSessionListResponse,
   isCreateChatSessionResponse,
   isHealthResponse,
+  isObjectDeletePreflight,
+  isObjectDetailResponse,
+  isObjectListResponse,
+  isObjectRenderView,
+  isObjectTypeContractResponse,
   isProviderStatusResponse,
   isProviderProfilesResponse,
   isRecord,
@@ -62,6 +67,21 @@ export type {
   JsonObject,
   JsonPrimitive,
   JsonValue,
+  ObjectCreateRequest,
+  ObjectDeletePreflight,
+  ObjectDeletePreflightRequest,
+  ObjectDeleteRequest,
+  ObjectDetailResponse,
+  ObjectIdContract,
+  ObjectKind,
+  ObjectListFilters,
+  ObjectListItem,
+  ObjectListResponse,
+  ObjectRenderSection,
+  ObjectRenderView,
+  ObjectTypeContract,
+  ObjectTypeContractResponse,
+  ObjectUpdateRequest,
   ContentDeltaAgentEvent,
   ContentDeltaPayload,
   ProviderConnectionState,
@@ -82,5 +102,6 @@ export type {
   StateTimelineItem,
   StateTimelineResponse,
   WritebackResult,
+  ReviewBatchOutcome,
   WritebackStatus,
 } from "./types.js";

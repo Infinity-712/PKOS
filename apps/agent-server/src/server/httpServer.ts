@@ -7,6 +7,7 @@ import { ContextBuilder } from "../context/ContextBuilder.js";
 import { openAgentDatabase, type AgentDatabase } from "../db/connection.js";
 import { EventStore } from "../events/EventStore.js";
 import { handleInboxReviewRoutes } from "../pkos/InboxReviewRoutes.js";
+import { handleObjectRoutes } from "../pkos/ObjectRoutes.js";
 import { handleReminderRoutes } from "../pkos/ReminderRoutes.js";
 import { handleReviewRoutes } from "../pkos/ReviewRoutes.js";
 import { handleStateTimelineRoutes } from "../pkos/StateTimelineRoutes.js";
@@ -74,6 +75,10 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       }
 
       if (await handleReviewRoutes(req, res)) {
+        return;
+      }
+
+      if (await handleObjectRoutes(req, res)) {
         return;
       }
 

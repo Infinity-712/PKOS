@@ -143,11 +143,10 @@ export const reviewCorrectionTool: ToolDefinition<ReviewCorrectionInput, ToolOut
 };
 
 function requireRating(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number.parseInt(String(value), 10);
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 5) {
     throw new Error("rating must be an integer from 1 to 5");
   }
-  return parsed;
+  return value;
 }
 
 function requireRatingItems(value: unknown): Array<{ objectId: string; rating: number }> {
