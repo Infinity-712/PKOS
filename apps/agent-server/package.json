@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
+    "mobile-compat-smoke": "node --import tsx --test src/scripts/mobileCompatSmoke.ts",
+    "mobile-compat-regression": "node --import tsx src/scripts/mobileCompat/regression.ts",
     "dev": "tsx src/index.ts",
     "smoke": "tsx src/scripts/smoke.ts",
     "context-smoke": "tsx src/scripts/contextSmoke.ts",

@@ -38,6 +38,7 @@ export class AgentRunner {
     providerRegistry: ProviderProfileRegistry = new ProviderProfileRegistry(),
     private readonly events: EventStore = new EventStore(db),
     private readonly contextBuilder: ContextBuilder = new ContextBuilder(db),
+    private readonly providerFactory: typeof createProviderFromSnapshot = createProviderFromSnapshot,
   ) {
     this.providerRegistry = providerRegistry;
     this.selectionStore = new ProviderRuntimeSelectionStore(db, providerRegistry);
@@ -77,7 +78,7 @@ export class AgentRunner {
 
   preflight(input: { allowExternalProvider?: boolean }): void {
     const snapshot = this.selectionStore.getActiveSnapshot();
-    const provider = createProviderFromSnapshot(snapshot);
+    const provider = this.providerFactory(snapshot);
     if (!provider) {
       throw new ProviderError("provider_not_configured", "provider is not configured", 503);
     }
@@ -200,7 +201,7 @@ export class AgentRunner {
   }
 
   private requireProvider(snapshot: ProviderSelectionSnapshot, input: { allowExternalProvider?: boolean }): AgentProvider {
-    const provider = createProviderFromSnapshot(snapshot);
+    const provider = this.providerFactory(snapshot);
     if (!provider) {
       throw new ProviderError("provider_not_configured", "provider is not configured", 503);
     }

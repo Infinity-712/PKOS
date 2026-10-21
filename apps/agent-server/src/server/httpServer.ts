@@ -13,6 +13,7 @@ import { handleReviewRoutes } from "../pkos/ReviewRoutes.js";
 import { handleStateTimelineRoutes } from "../pkos/StateTimelineRoutes.js";
 import { handleTaskRoutes } from "../pkos/TaskRoutes.js";
 import { ProviderProfileRegistry } from "../providers/registry/ProviderProfileRegistry.js";
+import type { createProviderFromSnapshot } from "../providers/ProviderFactory.js";
 import { handleReminderRuntimeRoutes } from "../reminders/ReminderRuntimeRoutes.js";
 import { ReminderScheduler } from "../reminders/ReminderScheduler.js";
 import { GenerationManager } from "../runtime/GenerationManager.js";
@@ -27,26 +28,47 @@ import { applyCors, handleCorsPreflight } from "./cors.js";
 export type AgentHttpServerOptions = {
   db?: AgentDatabase;
   runtimeIdentity?: RuntimeIdentity;
+  testDependencies?: {
+    db: AgentDatabase;
+    runtimeIdentity: RuntimeIdentity;
+    registry: ProviderProfileRegistry;
+    contextBuilder: ContextBuilder;
+    providerFactory: typeof createProviderFromSnapshot;
+    // Test-only policy/transport boundary. Production CORS and routes stay unchanged.
+    handleRequest?: (req: IncomingMessage, res: ServerResponse, next: () => Promise<void>) => Promise<void>;
+  };
 };
 
 export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Server {
-  const db = options.db ?? openAgentDatabase();
+  const testDeps = options.testDependencies;
+  const db = testDeps?.db ?? options.db ?? openAgentDatabase();
   const events = new EventStore(db);
   const generations = new GenerationManager(db, events);
-  const contextBuilder = new ContextBuilder(db);
-  const runner = new AgentRunner(db, generations, new ProviderProfileRegistry(), events, contextBuilder);
-  const registry = createDefaultToolRegistry();
-  const writebackRouter = new WritebackRouter();
-  const toolExecutor = new ToolExecutor(db, registry, writebackRouter, events);
-  const runtimeIdentity = options.runtimeIdentity ?? buildRuntimeIdentity({ paths: resolveAgentPaths() });
-  const reminderScheduler = new ReminderScheduler(db, runtimeIdentity, { events });
+  const contextBuilder = testDeps?.contextBuilder ?? new ContextBuilder(db);
+  const runner = new AgentRunner(db, generations, testDeps?.registry ?? new ProviderProfileRegistry(), events, contextBuilder, testDeps?.providerFactory);
+  const registry = testDeps ? null : createDefaultToolRegistry();
+  const toolExecutor = registry ? new ToolExecutor(db, registry, new WritebackRouter(), events) : null;
+  const runtimeIdentity = testDeps?.runtimeIdentity ?? options.runtimeIdentity ?? buildRuntimeIdentity({ paths: resolveAgentPaths() });
+  const reminderScheduler = testDeps ? null : new ReminderScheduler(db, runtimeIdentity, { events });
+
+  if (!testDeps?.handleRequest) return createServer(dispatch);
 
   return createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
-      if (handleCorsPreflight(req, res)) {
-        return;
+      await testDeps.handleRequest!(req, res, () => dispatch(req, res));
+    } catch (error) {
+      if (res.headersSent) { res.destroy(); return; }
+      const message = error instanceof Error ? error.message : String(error);
+      sendJson(res, 500, { ok: false, error: { code: "REQUEST_FAILED", message } });
+    }
+  });
+
+  async function dispatch(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    try {
+      if (!testDeps?.handleRequest) {
+        if (handleCorsPreflight(req, res)) return;
+        applyCors(req, res);
       }
-      applyCors(req, res);
 
       if (req.method === "GET" && (req.url === "/health" || req.url?.startsWith("/health?"))) {
         sendJson(res, 200, createHealthPayload(runtimeIdentity, db));
@@ -58,11 +80,16 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
         return;
       }
 
-      if (await handleReminderRuntimeRoutes(req, res, reminderScheduler)) {
+      if (reminderScheduler && await handleReminderRuntimeRoutes(req, res, reminderScheduler)) {
         return;
       }
 
       if (await handleChatRoutes(req, res, { db, runner, contextBuilder })) {
+        return;
+      }
+
+      if (testDeps) {
+        sendJson(res, 404, { ok: false, error: { code: "NOT_FOUND", message: "route not found" } });
         return;
       }
 
@@ -82,7 +109,7 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
         return;
       }
 
-      if (await handleActionRoutes(req, res, { db, registry, executor: toolExecutor, events })) {
+      if (registry && toolExecutor && await handleActionRoutes(req, res, { db, registry, executor: toolExecutor, events })) {
         return;
       }
 
@@ -103,7 +130,7 @@ export function createAgentHttpServer(options: AgentHttpServerOptions = {}): Ser
       const message = error instanceof Error ? error.message : String(error);
       sendJson(res, 500, { ok: false, error: { code: "REQUEST_FAILED", message } });
     }
-  });
+  }
 }
 
 function safeProviderStatus(runner: AgentRunner) {
