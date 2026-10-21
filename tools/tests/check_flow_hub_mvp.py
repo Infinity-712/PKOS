@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -24,15 +25,17 @@ REQUIRED_FLOW_FILES = [
 
 
 def main() -> int:
-    work = Path("tools/tests/tmp_flow_hub")
-    if work.exists():
-        shutil.rmtree(work)
-    work.mkdir(parents=True)
+    with tempfile.TemporaryDirectory(prefix="pkos-flow-hub-") as temporary:
+        return check(Path(temporary))
+
+
+def check(work: Path) -> int:
+    shutil.copytree(ROOT / "tools/tests/fixtures/digest/objects", work / "objects")
 
     runtime_flow = work / "runtime" / "flow"
     context_path = work / "runtime" / "agent_context.json"
 
-    rc = run_gen_flow(Path("objects"), Path("review"), Path("state"), runtime_flow)
+    rc = run_gen_flow(work / "objects", work / "review", work / "state", runtime_flow)
     if rc != 0:
         print("FAIL: gen-flow returned non-zero")
         return 1
@@ -48,7 +51,7 @@ def main() -> int:
                 print(f"FAIL: {name} missing key: {key}")
                 return 1
 
-    rc = run_export_agent_context(Path("objects"), Path("review"), Path("digests"), Path("state"), runtime_flow, context_path)
+    rc = run_export_agent_context(work / "objects", work / "review", work / "digests", work / "state", runtime_flow, context_path)
     if rc != 0 or not context_path.exists():
         print("FAIL: export-agent-context did not generate context")
         return 1
@@ -101,7 +104,6 @@ def main() -> int:
         print("FAIL: publish-check appears in CLI help")
         return 1
 
-    shutil.rmtree(work)
     print("PASS: Flow Hub MVP outputs and bounded context verified")
     return 0
 

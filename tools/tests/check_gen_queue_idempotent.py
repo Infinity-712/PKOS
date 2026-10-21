@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -12,10 +13,12 @@ from tools.queue_gen.gen_queue import run_gen_queue
 
 
 def main() -> int:
-    base = Path("tools/tests/fixtures/gen_queue")
-    work = Path("tools/tests/tmp_gen_queue")
-    if work.exists():
-        shutil.rmtree(work)
+    with tempfile.TemporaryDirectory(prefix="pkos-gen-queue-") as temporary:
+        return check(Path(temporary) / "fixture")
+
+
+def check(work: Path) -> int:
+    base = ROOT / "tools/tests/fixtures/gen_queue"
     shutil.copytree(base, work)
 
     objects = work / "objects"

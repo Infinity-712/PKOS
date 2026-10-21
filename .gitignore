@@ -29,8 +29,13 @@ node_modules/
 /apps/web-dashboard/dist-smoke/
 /apps/web-dashboard/dist-task-due-picker-smoke/
 /apps/web-dashboard/dist-review-web-smoke/
+/apps/web-dashboard/dist-object-web-smoke/
 /apps/desktop/dist/
 /packages/agent-client/dist/
 
 __pycache__/
 *.py[cod]
+
+# Historical test outputs; current tests use isolated temporary directories.
+/tools/tests/tmp_digest/
+/tools/tests/tmp_gen_queue/

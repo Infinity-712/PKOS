@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 import hashlib
 import os
 from pathlib import Path
@@ -8,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from typing import Any
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -79,7 +82,8 @@ def _assert(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def _legacy_client(repo: Path) -> Any:
+@contextmanager
+def _legacy_client(repo: Path) -> Iterator[Any]:
     old_env = {
         "PKOS_REPO_ROOT": os.environ.get("PKOS_REPO_ROOT"),
         "PKOS_WRITE_TOKEN": os.environ.get("PKOS_WRITE_TOKEN"),
@@ -90,13 +94,47 @@ def _legacy_client(repo: Path) -> Any:
         from fastapi.testclient import TestClient
         from tools.server.main import create_app
 
-        return TestClient(create_app())
+        with TestClient(create_app()) as client:
+            yield client
     finally:
         for key, value in old_env.items():
             if value is None:
                 os.environ.pop(key, None)
             else:
                 os.environ[key] = value
+
+
+def _check_legacy_client_isolation() -> None:
+    with tempfile.TemporaryDirectory(prefix="pkos-legacy-isolation-") as directory:
+        root = Path(directory)
+        repo = root / "client"
+        ambient = root / "ambient"
+        object_path = _write_seed_object(repo)
+        _write_seed_object(ambient)
+        ambient_hash = _tree_hash(ambient)
+        ambient_env = {
+            "PKOS_REPO_ROOT": str(ambient),
+            "PKOS_WRITE_TOKEN": "ambient-test-token",
+        }
+        with patch.dict(os.environ, ambient_env):
+            with _legacy_client(repo) as client:
+                response = client.get("/api/objects/fact.legacy.quarantine")
+                _assert(response.status_code == 200, "isolation object lookup failed")
+                _assert(
+                    response.json().get("_path") == object_path.as_posix(),
+                    "request-time root escaped the temporary client repository",
+                )
+                _assert(os.environ["PKOS_WRITE_TOKEN"] == "legacy-test-token", "client token restored too early")
+                ratings = client.post(
+                    "/api/review/ratings:batch",
+                    headers={"X-PKOS-Token": "legacy-test-token"},
+                    json={"items": [{"id": "fact.legacy.quarantine", "score": 4}]},
+                )
+                _assert(ratings.status_code == 410, "isolation ratings request was not quarantined")
+                _assert(client.post("/api/chat", json={"message": "hello"}).status_code == 410, "isolation chat request was not quarantined")
+            for key, value in ambient_env.items():
+                _assert(os.environ.get(key) == value, f"client did not restore {key}")
+        _assert(_tree_hash(ambient) == ambient_hash, "legacy requests changed the ambient sentinel repository")
 
 
 def _check_fastapi_quarantine() -> None:
@@ -108,33 +146,33 @@ def _check_fastapi_quarantine() -> None:
         object_hash_before = _sha256(object_path)
         log_hash_before = _tree_hash(repo / "review" / "logs")
 
-        client = _legacy_client(repo)
-        response = client.post(
-            "/api/review/ratings:batch",
-            headers={"X-PKOS-Token": "legacy-test-token"},
-            json={"items": [{"id": "fact.legacy.quarantine", "score": 4}]},
-        )
-        _assert(response.status_code == 410, f"ratings endpoint expected 410, got {response.status_code}: {response.text}")
-        payload = response.json()
-        _assert(payload.get("error") == "legacy_writeback_disabled", "ratings endpoint did not return quarantine code")
+        with _legacy_client(repo) as client:
+            response = client.post(
+                "/api/review/ratings:batch",
+                headers={"X-PKOS-Token": "legacy-test-token"},
+                json={"items": [{"id": "fact.legacy.quarantine", "score": 4}]},
+            )
+            _assert(response.status_code == 410, f"ratings endpoint expected 410, got {response.status_code}: {response.text}")
+            payload = response.json()
+            _assert(payload.get("error") == "legacy_writeback_disabled", "ratings endpoint did not return quarantine code")
 
-        _assert(_sha256(object_path) == object_hash_before, "legacy ratings endpoint mutated object file")
-        _assert(_tree_hash(repo / "review" / "logs") == log_hash_before, "legacy ratings endpoint changed review logs")
-        head_after = _run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
-        _assert(head_after == head_before, "legacy ratings endpoint changed git HEAD")
+            _assert(_sha256(object_path) == object_hash_before, "legacy ratings endpoint mutated object file")
+            _assert(_tree_hash(repo / "review" / "logs") == log_hash_before, "legacy ratings endpoint changed review logs")
+            head_after = _run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+            _assert(head_after == head_before, "legacy ratings endpoint changed git HEAD")
 
-        chat = client.post("/api/chat", json={"message": "hello"})
-        _assert(chat.status_code == 410, f"legacy chat expected 410, got {chat.status_code}: {chat.text}")
-        _assert(chat.json().get("error") == "legacy_chat_retired", "legacy chat did not return retired code")
+            chat = client.post("/api/chat", json={"message": "hello"})
+            _assert(chat.status_code == 410, f"legacy chat expected 410, got {chat.status_code}: {chat.text}")
+            _assert(chat.json().get("error") == "legacy_chat_retired", "legacy chat did not return retired code")
 
-        health = client.get("/api/health")
-        _assert(health.status_code == 200, "legacy health failed")
-        health_payload = health.json()
-        _assert(health_payload.get("service") == "pkos-legacy-fastapi", "health missing legacy service name")
-        _assert(health_payload.get("legacy") is True, "health missing legacy=true")
-        _assert(health_payload.get("readOnly") is True, "health missing readOnly=true")
-        _assert(health_payload.get("authorityWriteEnabled") is False, "health missing authorityWriteEnabled=false")
-        _assert(health_payload.get("replacement") == "pkos-agent-server", "health missing replacement")
+            health = client.get("/api/health")
+            _assert(health.status_code == 200, "legacy health failed")
+            health_payload = health.json()
+            _assert(health_payload.get("service") == "pkos-legacy-fastapi", "health missing legacy service name")
+            _assert(health_payload.get("legacy") is True, "health missing legacy=true")
+            _assert(health_payload.get("readOnly") is True, "health missing readOnly=true")
+            _assert(health_payload.get("authorityWriteEnabled") is False, "health missing authorityWriteEnabled=false")
+            _assert(health_payload.get("replacement") == "pkos-agent-server", "health missing replacement")
     finally:
         shutil.rmtree(repo, ignore_errors=True)
 
@@ -200,6 +238,7 @@ def _check_docs_quarantine() -> None:
 
 
 def main() -> int:
+    _check_legacy_client_isolation()
     _check_fastapi_quarantine()
     _check_source_boundaries()
     _check_static_dashboard_quarantine()

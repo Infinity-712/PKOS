@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -13,10 +14,12 @@ from tools.digest.gen_digest import run_gen_digest
 
 
 def main() -> int:
-    base = Path("tools/tests/fixtures/digest")
-    work = Path("tools/tests/tmp_digest")
-    if work.exists():
-        shutil.rmtree(work)
+    with tempfile.TemporaryDirectory(prefix="pkos-digest-") as temporary:
+        return check(Path(temporary) / "fixture")
+
+
+def check(work: Path) -> int:
+    base = ROOT / "tools/tests/fixtures/digest"
     shutil.copytree(base, work)
 
     objects_dir = work / "objects"

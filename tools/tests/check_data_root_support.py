@@ -29,9 +29,7 @@ def _read_bytes(path: Path) -> bytes | None:
 
 def main() -> int:
     data_root = Path(tempfile.mkdtemp(prefix="pkos-data-root-support-"))
-    private_out = ROOT / "tools" / "tests" / "tmp_data_root_private_site"
-    if private_out.exists():
-        shutil.rmtree(private_out)
+    private_out = data_root / "runtime" / "private-site-export"
 
     core_inbox_before = _read_bytes(ROOT / "inbox" / "items.jsonl")
     core_state_before = _read_bytes(ROOT / "state" / "snapshots.jsonl")
@@ -60,7 +58,7 @@ def main() -> int:
             [
                 "export-site-data",
                 "--private-out",
-                "tools/tests/tmp_data_root_private_site",
+                str(private_out),
                 "--runtime-out",
                 "runtime/site-private/_pkos",
             ],
@@ -151,7 +149,6 @@ def main() -> int:
             return 1
     finally:
         shutil.rmtree(data_root, ignore_errors=True)
-        shutil.rmtree(private_out, ignore_errors=True)
 
     print("PASS: PKOS_DATA_ROOT directs authority, runtime, and operational data to data root")
     return 0

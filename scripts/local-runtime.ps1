@@ -434,13 +434,18 @@ function Start-LocalRuntime {
   if ($listener) {
     $runtimeInfo = Get-RuntimeInfoFromPort $config.AgentPort
     $compatibility = Test-AgentServerCompatibility $config $runtimeInfo
-    if ($compatibility.Kind -eq "compatible") {
-      Write-Info "AGENT_SERVER_ALREADY_RUNNING_SAME_RUNTIME_AND_BUILD runtime=$($config.RuntimeFingerprint) build=$($config.ServiceBuild.BuildFingerprint)"
-      return
-    }
     if ($compatibility.Kind -eq "runtime") {
       Write-Output "AGENT_SERVER_RUNTIME_MISMATCH expected=$($config.RuntimeFingerprint) actual=$($runtimeInfo.runtimeFingerprint) pid=$($listener.OwningProcess)"
       exit 1
+    }
+    # Dirty is a reuse policy, not a readiness condition for our newly started child.
+    if ($runtimeInfo.service.name -eq $config.ServiceBuild.Name -and
+        ($config.ServiceBuild.Dirty -or $runtimeInfo.service.dirty -eq $true)) {
+      Fail-Code "AGENT_SERVER_DIRTY_REUSE_REFUSED" "Development source may differ; explicit restart required. sourceDirty=$($config.ServiceBuild.Dirty) instanceDirty=$($runtimeInfo.service.dirty) pid=$($listener.OwningProcess). Existing process was not stopped."
+    }
+    if ($compatibility.Kind -eq "compatible") {
+      Write-Info "AGENT_SERVER_ALREADY_RUNNING_SAME_RUNTIME_AND_BUILD runtime=$($config.RuntimeFingerprint) build=$($config.ServiceBuild.BuildFingerprint)"
+      return
     }
     Write-BuildMismatch $config $compatibility ([int]$listener.OwningProcess)
     exit 1
@@ -454,7 +459,7 @@ function Start-LocalRuntime {
   $agent = Start-Process -FilePath "npm.cmd" -ArgumentList @("run", "dev") -WorkingDirectory (Join-Path $config.CoreRoot "apps\agent-server") -WindowStyle Hidden -PassThru
   Add-ProcessRecord "agent-server" $agent.Id $agent.StartTime $config.RuntimeFingerprint
   Wait-AgentReady $config
-  Write-Info "AGENT_SERVER_STARTED pid=$($agent.Id) runtime=$($config.RuntimeFingerprint) build=$($config.ServiceBuild.BuildFingerprint)"
+  Write-Info "AGENT_SERVER_STARTED pid=$($agent.Id) runtime=$($config.RuntimeFingerprint) build=$($config.ServiceBuild.BuildFingerprint) dirty=$($config.ServiceBuild.Dirty)"
 
   if ($config.StartWebDashboard) {
     $webListener = Test-PortListener $config.WebPort
