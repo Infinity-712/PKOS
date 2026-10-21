@@ -1,3 +1,7 @@
+import { translateUiMessage } from "../i18n/copy.js";
+import { useLocale } from "../i18n/Locale.js";
+import { formatDateTime } from "@pkos/agent-client";
+import { RefreshCw, Check } from "lucide-react";
 import { useEffect, useState, type FormEvent, type MouseEvent } from "react";
 
 import { ApiClientError, getJson, postJson } from "../lib/apiClient.js";
@@ -7,6 +11,8 @@ import type { ActionRequestView, ActionResolution, JsonObject, WritebackResult }
 const STATUS_OPTIONS = ["", "running", "completed", "failed", "indeterminate"];
 
 export function ActionRequestsPage() {
+  const { label: uiLabel, locale, t } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [requests, setRequests] = useState<ActionRequestView[]>([]);
   const [selected, setSelected] = useState<ActionRequestView | null>(null);
   const [status, setStatus] = useState("");
@@ -46,59 +52,59 @@ export function ActionRequestsPage() {
     <section className="split-page">
       <div className="panel">
         <div className="panel-heading">
-          <h2>Action Requests</h2>
+          <h2>{uiLabel("Action Requests")}</h2>
           <button type="button" onClick={() => void refresh()}>
-            Refresh
+            <RefreshCw size={16} aria-hidden="true" />{uiLabel("Refresh")}
           </button>
         </div>
         <div className="filter-row">
           <label>
-            status
+            {uiLabel("status")}
             <select value={status} onChange={(event) => setStatus(event.target.value)}>
               {STATUS_OPTIONS.map((item) => (
                 <option key={item || "all"} value={item}>
-                  {item || "all"}
+                  {uiLabel(item || "all")}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            limit
+            {uiLabel("limit")}
             <input value={limit} onChange={(event) => setLimit(event.target.value)} />
           </label>
         </div>
-        {message ? <p className="notice">{message}</p> : null}
+        {message ? <p className="notice">{uiMessage(message)}</p> : null}
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>requestId</th>
-                <th>actionName</th>
-                <th>stored</th>
-                <th>effective</th>
-                <th>stale</th>
-                <th>updatedAt</th>
-                <th>summary</th>
+                <th>{uiLabel("requestId")}</th>
+                <th>{uiLabel("actionName")}</th>
+                <th>{uiLabel("stored")}</th>
+                <th>{uiLabel("effective")}</th>
+                <th>{uiLabel("stale")}</th>
+                <th>{uiLabel("updatedAt")}</th>
+                <th>{uiLabel("summary")}</th>
               </tr>
             </thead>
             <tbody>
               {requests.map((request) => (
-                <tr key={request.requestId} onClick={() => void loadDetail(request.requestId)}>
+                <tr key={request.requestId} tabIndex={0} aria-label={t(`查看请求 ${request.requestId}`, `View request ${request.requestId}`)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); void loadDetail(request.requestId); } }} onClick={() => void loadDetail(request.requestId)}>
                   <td>
-                    <button type="button" className="link-button" onClick={(event) => copyRequestId(event, request.requestId)}>
+                    <button type="button" className="link-button" title={t("复制请求 ID", "Copy request ID")} aria-label={t(`复制请求 ID ${request.requestId}`, `Copy request ID ${request.requestId}`)} onClick={(event) => copyRequestId(event, request.requestId)}>
                       {shortId(request.requestId)}
                     </button>
                   </td>
-                  <td>{request.actionName}</td>
-                  <td>{request.storedStatus}</td>
+                  <td>{uiLabel(request.actionName)}</td>
+                  <td>{uiLabel(request.storedStatus)}</td>
                   <td>
                     <span className={`badge ${request.effectiveStatus === "completed" ? "good" : request.effectiveStatus === "indeterminate" ? "warn" : ""}`}>
-                      {request.effectiveStatus}
+                      {uiLabel(request.effectiveStatus)}
                     </span>
                   </td>
-                  <td>{request.stale ? "yes" : "no"}</td>
-                  <td>{request.updatedAt}</td>
-                  <td>{resultSummary(request.result ?? request.error)}</td>
+                  <td>{request.stale ? uiLabel("yes") : uiLabel("no")}</td>
+                  <td>{formatDateTime(request.updatedAt)}</td>
+                  <td>{resultSummary(request.result ?? request.error, uiLabel)}</td>
                 </tr>
               ))}
             </tbody>
@@ -107,28 +113,28 @@ export function ActionRequestsPage() {
       </div>
 
       <div className="panel">
-        <h2>Detail</h2>
+        <h2>{uiLabel("Detail")}</h2>
         {selected ? (
           <>
             <dl className="kv-list">
-              <dt>requestId</dt>
+              <dt>{uiLabel("requestId")}</dt>
               <dd>{selected.requestId}</dd>
-              <dt>actionName</dt>
-              <dd>{selected.actionName}</dd>
-              <dt>payloadSha256</dt>
+              <dt>{uiLabel("actionName")}</dt>
+              <dd>{uiLabel(selected.actionName)}</dd>
+              <dt>{uiLabel("payloadSha256")}</dt>
               <dd>{selected.payloadSha256}</dd>
-              <dt>toolCallId</dt>
-              <dd>{selected.toolCallId ?? "none"}</dd>
-              <dt>stored/effective</dt>
+              <dt>{uiLabel("toolCallId")}</dt>
+              <dd>{selected.toolCallId ?? uiLabel("none")}</dd>
+              <dt>{uiLabel("stored/effective")}</dt>
               <dd>
-                {selected.storedStatus} / {selected.effectiveStatus} {selected.stale ? "(stale)" : ""}
+                {uiLabel(selected.storedStatus)} / {uiLabel(selected.effectiveStatus)} {selected.stale ? uiLabel("(stale)") : ""}
               </dd>
-              <dt>result</dt>
-              <dd>{selected.result ? JSON.stringify(sanitizeWriteback(selected.result)) : "none"}</dd>
-              <dt>error</dt>
-              <dd>{selected.error ? JSON.stringify(sanitizeWriteback(selected.error)) : "none"}</dd>
-              <dt>resolution</dt>
-              <dd>{selected.resolution ? JSON.stringify(selected.resolution) : "none"}</dd>
+              <dt>{uiLabel("result")}</dt>
+              <dd>{selected.result ? JSON.stringify(sanitizeWriteback(selected.result)) : uiLabel("none")}</dd>
+              <dt>{uiLabel("error")}</dt>
+              <dd>{selected.error ? JSON.stringify(sanitizeWriteback(selected.error)) : uiLabel("none")}</dd>
+              <dt>{uiLabel("resolution")}</dt>
+              <dd>{selected.resolution ? JSON.stringify(selected.resolution) : uiLabel("none")}</dd>
             </dl>
             {selected.effectiveStatus === "indeterminate" ? (
               <ResolutionForm
@@ -141,7 +147,7 @@ export function ActionRequestsPage() {
             ) : null}
           </>
         ) : (
-          <p className="muted">选择一条 request 查看详情。</p>
+          <p className="muted">{uiLabel("选择一条 request 查看详情。")}</p>
         )}
       </div>
     </section>
@@ -149,6 +155,8 @@ export function ActionRequestsPage() {
 }
 
 function ResolutionForm(props: { request: ActionRequestView; onResolved: (request: ActionRequestView) => void }) {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [resolution, setResolution] = useState<ActionResolution>("confirmed_not_written");
   const [reason, setReason] = useState("");
   const [resolvedBy, setResolvedBy] = useState("local_user");
@@ -193,32 +201,32 @@ function ResolutionForm(props: { request: ActionRequestView; onResolved: (reques
 
   return (
     <form className="resolution-form" onSubmit={(event) => void submit(event)}>
-      <h3>Human Resolution</h3>
-      <p className="notice">confirmed_written 不会伪造 recordId；只表示你已人工核验 authority log 中存在写入。</p>
+      <h3>{uiLabel("Human Resolution")}</h3>
+      <p className="notice">{uiLabel("confirmed_written 不会伪造 recordId；只表示你已人工核验 authority log 中存在写入。")}</p>
       <label>
-        resolution
+        {uiLabel("resolution")}
         <select value={resolution} onChange={(event) => setResolution(event.target.value as ActionResolution)}>
-          <option value="confirmed_written">confirmed_written</option>
-          <option value="confirmed_not_written">confirmed_not_written</option>
-          <option value="abandoned">abandoned</option>
+          <option value="confirmed_written">{uiLabel("confirmed_written")}</option>
+          <option value="confirmed_not_written">{uiLabel("confirmed_not_written")}</option>
+          <option value="abandoned">{uiLabel("abandoned")}</option>
         </select>
       </label>
       <label>
-        resolvedBy
+        {uiLabel("resolvedBy")}
         <input value={resolvedBy} onChange={(event) => setResolvedBy(event.target.value)} />
       </label>
       <label>
-        reason
+        {uiLabel("reason")}
         <textarea rows={4} value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
       <label className="checkbox-line">
         <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} />
-        我已人工核验该操作结果。
+        {uiLabel("我已人工核验该操作结果。")}
       </label>
       <button type="submit" disabled={submitting}>
-        Resolve
+        <Check size={16} aria-hidden="true" />{uiLabel("Resolve")}
       </button>
-      {message ? <p className="notice">{message}</p> : null}
+      {message ? <p className="notice">{uiMessage(message)}</p> : null}
     </form>
   );
 }
@@ -234,11 +242,11 @@ function shortId(value: string): string {
   return value.length > 12 ? `${value.slice(0, 8)}...${value.slice(-4)}` : value;
 }
 
-function resultSummary(result: WritebackResult | undefined): string {
+function resultSummary(result: WritebackResult | undefined, label: (value: string) => string): string {
   if (!result) {
-    return "none";
+    return label("none");
   }
-  return [result.status, result.operation, result.errorCode].filter(Boolean).join(" / ");
+  return [result.status, result.operation, result.errorCode].filter(Boolean).map((value) => label(value!)).join(" / ");
 }
 
 function sanitizeWriteback(result: WritebackResult): JsonObject {

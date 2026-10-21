@@ -1,1 +1,1 @@
-export { AgentApiClientError as ApiClientError, getJson, postJson } from "@pkos/agent-client";
+export { AgentApiClientError as ApiClientError, getJson, postJson, putJson } from "@pkos/agent-client";

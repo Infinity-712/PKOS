@@ -1,3 +1,6 @@
+import { translateUiMessage } from "../i18n/copy.js";
+import { useLocale } from "../i18n/Locale.js";
+import { RefreshCw, Filter, Plus, Send } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   EMPTY_ATTEMPT,
@@ -54,6 +57,8 @@ const DEFAULT_CREATE: ReminderCreateDraft = {
 };
 
 export function RemindersPage() {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [filters, setFilters] = useState<ReminderFilters>(DEFAULT_FILTERS);
   const [items, setItems] = useState<ReminderItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -88,18 +93,18 @@ export function RemindersPage() {
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Reminders</h2>
-            <p className="subtle">One-shot reminders are human-managed authority records.</p>
+            <h2>{uiLabel("Reminders")}</h2>
+            <p className="subtle">{uiLabel("One-shot reminders are human-managed authority records.")}</p>
           </div>
           <button type="button" onClick={() => void refresh()} disabled={loading}>
-            Refresh
+            <RefreshCw size={16} aria-hidden="true" />{uiLabel("Refresh")}
           </button>
         </div>
         <p className="notice">
-          Reminders live in `reminders/items.jsonl` and `reminders/actions.jsonl`. Runtime notifications are rebuildable and are not authority.
+          {uiLabel("Reminders live in `reminders/items.jsonl` and `reminders/actions.jsonl`. Runtime notifications are rebuildable and are not authority.")}
         </p>
         <ReminderFilters filters={filters} onChange={setFilters} onApply={() => void refresh()} />
-        {message ? <p className="notice">{message}</p> : null}
+        {message ? <p className="notice">{uiMessage(message)}</p> : null}
         <ReminderList items={items} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
       </section>
       <ReminderCreatePanel onWritten={() => void refresh()} />
@@ -109,50 +114,52 @@ export function RemindersPage() {
 }
 
 function ReminderFilters(props: { filters: ReminderFilters; onChange: (next: ReminderFilters) => void; onApply: () => void }) {
+  const { label: uiLabel } = useLocale();
   return (
     <div className="filter-row state-filter-row">
       <label>
-        status
+        {uiLabel("status")}
         <select value={props.filters.status} onChange={(event) => props.onChange({ ...props.filters, status: event.target.value })}>
-          <option value="">all</option>
-          <option value="scheduled">scheduled</option>
-          <option value="acknowledged">acknowledged</option>
-          <option value="cancelled">cancelled</option>
+          <option value="">{uiLabel("all")}</option>
+          <option value="scheduled">{uiLabel("scheduled")}</option>
+          <option value="acknowledged">{uiLabel("acknowledged")}</option>
+          <option value="cancelled">{uiLabel("cancelled")}</option>
         </select>
       </label>
       <label>
-        taskId
+        {uiLabel("taskId")}
         <input value={props.filters.taskId} onChange={(event) => props.onChange({ ...props.filters, taskId: event.target.value })} />
       </label>
       <label>
-        source
+        {uiLabel("source")}
         <input value={props.filters.source} onChange={(event) => props.onChange({ ...props.filters, source: event.target.value })} />
       </label>
       <label>
-        limit
+        {uiLabel("limit")}
         <input value={props.filters.limit} onChange={(event) => props.onChange({ ...props.filters, limit: event.target.value })} />
       </label>
       <button type="button" onClick={props.onApply}>
-        Apply
+        <Filter size={16} aria-hidden="true" />{uiLabel("Apply")}
       </button>
     </div>
   );
 }
 
 function ReminderList(props: { items: ReminderItem[]; selectedId: string | null; onSelect: (id: string) => void }) {
+  const { label: uiLabel } = useLocale();
   if (props.items.length === 0) {
-    return <p className="muted">No reminders for the current filters.</p>;
+    return <p className="muted">{uiLabel("No reminders for the current filters.")}</p>;
   }
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>title</th>
-            <th>status</th>
-            <th>remind</th>
-            <th>task</th>
-            <th>source</th>
+            <th>{uiLabel("title")}</th>
+            <th>{uiLabel("status")}</th>
+            <th>{uiLabel("remind")}</th>
+            <th>{uiLabel("task")}</th>
+            <th>{uiLabel("source")}</th>
           </tr>
         </thead>
         <tbody>
@@ -162,13 +169,13 @@ function ReminderList(props: { items: ReminderItem[]; selectedId: string | null;
                 <button className="link-button" type="button" onClick={() => props.onSelect(item.id)}>
                   {item.title}
                 </button>
-                {props.selectedId === item.id ? <span className="badge good">selected</span> : null}
+                {props.selectedId === item.id ? <span className="badge good">{uiLabel("selected")}</span> : null}
               </td>
               <td>
-                <span className="badge">{item.status}</span>
+                <span className="badge">{uiLabel(item.status)}</span>
               </td>
               <td>{formatTaskDueAtBeijing(item.remindAt) || item.remindAt}</td>
-              <td>{item.taskId || "standalone"}</td>
+              <td>{item.taskId || uiLabel("standalone")}</td>
               <td>{item.source}</td>
             </tr>
           ))}
@@ -179,6 +186,8 @@ function ReminderList(props: { items: ReminderItem[]; selectedId: string | null;
 }
 
 function ReminderCreatePanel(props: { onWritten: () => void }) {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [draft, setDraft] = useState<ReminderCreateDraft>(DEFAULT_CREATE);
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
   const [message, setMessage] = useState<string | null>(null);
@@ -209,62 +218,63 @@ function ReminderCreatePanel(props: { onWritten: () => void }) {
 
   return (
     <form className="panel form-panel" onSubmit={(event) => void submit(event)}>
-      <h2>Create Reminder</h2>
+      <h2>{uiLabel("Create Reminder")}</h2>
       <label>
-        title
+        {uiLabel("title")}
         <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
       </label>
       <label>
-        description
+        {uiLabel("description")}
         <textarea rows={4} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} />
       </label>
       <label>
-        remindAt
+        {uiLabel("remindAt")}
         <TaskDuePicker value={draft.remindAt} onChange={(remindAt) => setDraft({ ...draft, remindAt })} />
       </label>
       <div className="compact-grid">
         <label>
-          source
+          {uiLabel("source")}
           <input value={draft.source} onChange={(event) => setDraft({ ...draft, source: event.target.value })} />
         </label>
         <label>
-          taskId
+          {uiLabel("taskId")}
           <input value={draft.taskId} onChange={(event) => setDraft({ ...draft, taskId: event.target.value })} />
         </label>
       </div>
-      <AttemptBox attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel="Create Reminder" />
-      {message ? <p className="notice">{message}</p> : null}
+      <AttemptBox attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel={uiLabel("Create Reminder")} />
+      {message ? <p className="notice">{uiMessage(message)}</p> : null}
     </form>
   );
 }
 
 function ReminderDetailPanel(props: { reminder: ReminderItem | null; onChanged: () => void }) {
+  const { label: uiLabel } = useLocale();
   if (!props.reminder) {
     return (
       <section className="panel">
-        <h2>Reminder Detail</h2>
-        <p className="muted">Select a reminder to inspect and act on.</p>
+        <h2>{uiLabel("Reminder Detail")}</h2>
+        <p className="muted">{uiLabel("Select a reminder to inspect and act on.")}</p>
       </section>
     );
   }
   return (
     <section className="panel form-panel">
-      <h2>Reminder Detail</h2>
+      <h2>{uiLabel("Reminder Detail")}</h2>
       <dl className="kv-list">
-        <dt>id</dt>
+        <dt>{uiLabel("id")}</dt>
         <dd>{props.reminder.id}</dd>
-        <dt>title</dt>
+        <dt>{uiLabel("title")}</dt>
         <dd>{props.reminder.title}</dd>
-        <dt>description</dt>
-        <dd>{props.reminder.description || "none"}</dd>
-        <dt>status</dt>
-        <dd>{props.reminder.status}</dd>
-        <dt>remind</dt>
+        <dt>{uiLabel("description")}</dt>
+        <dd>{props.reminder.description || uiLabel("none")}</dd>
+        <dt>{uiLabel("status")}</dt>
+        <dd>{uiLabel(props.reminder.status)}</dd>
+        <dt>{uiLabel("remind")}</dt>
         <dd>{formatTaskDueAtBeijing(props.reminder.remindAt) || props.reminder.remindAt}</dd>
-        <dt>task</dt>
-        <dd>{props.reminder.taskId || "standalone"}</dd>
-        <dt>latest reason</dt>
-        <dd>{props.reminder.latestReason || "none"}</dd>
+        <dt>{uiLabel("task")}</dt>
+        <dd>{props.reminder.taskId || uiLabel("standalone")}</dd>
+        <dt>{uiLabel("latest reason")}</dt>
+        <dd>{props.reminder.latestReason || uiLabel("none")}</dd>
       </dl>
       <ReminderActionForm reminder={props.reminder} onChanged={props.onChanged} />
       <ReminderRescheduleForm reminder={props.reminder} onChanged={props.onChanged} />
@@ -273,6 +283,8 @@ function ReminderDetailPanel(props: { reminder: ReminderItem | null; onChanged: 
 }
 
 function ReminderActionForm(props: { reminder: ReminderItem; onChanged: () => void }) {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [action, setAction] = useState<"acknowledge" | "cancel">("acknowledge");
   const [reason, setReason] = useState("");
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
@@ -311,25 +323,27 @@ function ReminderActionForm(props: { reminder: ReminderItem; onChanged: () => vo
 
   return (
     <form className="review-action" onSubmit={(event) => void submit(event)}>
-      <h3>Explicit Reminder Action</h3>
+      <h3>{uiLabel("Explicit Reminder Action")}</h3>
       <label>
-        action
+        {uiLabel("action")}
         <select value={action} onChange={(event) => setAction(event.target.value === "cancel" ? "cancel" : "acknowledge")}>
-          <option value="acknowledge">acknowledge</option>
-          <option value="cancel">cancel</option>
+          <option value="acknowledge">{uiLabel("acknowledge")}</option>
+          <option value="cancel">{uiLabel("cancel")}</option>
         </select>
       </label>
       <label>
-        reason
+        {uiLabel("reason")}
         <textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <AttemptBox attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel="Apply Reminder Action" />
-      {message ? <p className="notice">{message}</p> : null}
+      <AttemptBox attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel={uiLabel("Apply Reminder Action")} />
+      {message ? <p className="notice">{uiMessage(message)}</p> : null}
     </form>
   );
 }
 
 function ReminderRescheduleForm(props: { reminder: ReminderItem; onChanged: () => void }) {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [remindAt, setRemindAt] = useState<string | null>(props.reminder.remindAt);
   const [reason, setReason] = useState("");
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
@@ -369,39 +383,43 @@ function ReminderRescheduleForm(props: { reminder: ReminderItem; onChanged: () =
 
   return (
     <form className="review-action" onSubmit={(event) => void submit(event)}>
-      <h3>Reschedule</h3>
+      <h3>{uiLabel("Reschedule")}</h3>
       <label>
-        new remindAt
+        {uiLabel("new remindAt")}
         <TaskDuePicker value={remindAt} onChange={setRemindAt} />
       </label>
       <label>
-        reason
+        {uiLabel("reason")}
         <textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
-      <AttemptBox attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel="Reschedule Reminder" />
-      {message ? <p className="notice">{message}</p> : null}
+      <AttemptBox attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel={uiLabel("Reschedule Reminder")} />
+      {message ? <p className="notice">{uiMessage(message)}</p> : null}
     </form>
   );
 }
 
 function AttemptBox(props: { attempt: RequestAttemptState; onNew: () => void; submitLabel: string }) {
+  const { label: uiLabel, locale, t } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const frozen = props.attempt.frozenPayload;
   return (
     <div className="attempt-box">
       <div className="attempt-row">
         <button type="submit" disabled={props.attempt.status === "submitting"}>
-          {frozen ? "Retry Same Request" : props.submitLabel}
+          <Send size={16} aria-hidden="true" />
+          {frozen ? uiLabel("Retry Same Request") : props.submitLabel}
         </button>
         <button type="button" onClick={props.onNew}>
-          New Request
+          <Plus size={16} aria-hidden="true" />{uiLabel("New Request")}
         </button>
-        <span className={`badge ${isSuccessfulAttempt(props.attempt.status) ? "good" : props.attempt.status === "draft" ? "" : "warn"}`}>{props.attempt.status}</span>
+        <span className={`badge ${isSuccessfulAttempt(props.attempt.status) ? "good" : props.attempt.status === "draft" ? "" : "warn"}`}>{uiLabel(props.attempt.status)}</span>
       </div>
+      {props.attempt.lastError ? <p className="notice" role="alert">{uiMessage(props.attempt.lastError)}</p> : null}
       <dl className="kv-list compact">
-        <dt>requestId</dt>
-        <dd>{props.attempt.requestId ?? "draft"}</dd>
-        <dt>frozen</dt>
-        <dd>{frozen ? `${frozen.actionName}, ${JSON.stringify(frozen.body).length} chars` : "none"}</dd>
+        <dt>{uiLabel("requestId")}</dt>
+        <dd>{props.attempt.requestId ?? uiLabel("draft")}</dd>
+        <dt>{uiLabel("frozen")}</dt>
+        <dd>{frozen ? `${frozen.actionName}, ${JSON.stringify(frozen.body).length} ${t("字符", "chars")}` : uiLabel("none")}</dd>
       </dl>
     </div>
   );

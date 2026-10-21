@@ -1,5 +1,14 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { LocaleProvider } from "../renderer/i18n/Locale.js";
+import { labels, messages as localizedMessages } from "../renderer/i18n/copy.js";
+import { ChatPanel } from "../renderer/features/chat/ChatPanel.js";
+import { CapturePage } from "../renderer/pages/CapturePage.js";
+import { StatusPage } from "../renderer/pages/StatusPage.js";
+import { AttemptFooter } from "../renderer/features/capture/QuickInboxCapture.js";
+import { BODY_OPTIONS, CAPTURE_SOURCE_OPTIONS, CAPTURE_TYPE_OPTIONS, CONTEXT_OPTIONS, ENERGY_OPTIONS, MODE_OPTIONS, MOOD_OPTIONS, RISK_OPTIONS, STATE_SOURCE_OPTIONS, type AgentApiClient } from "@pkos/agent-client";
 
 import {
   EMPTY_ATTEMPT,
@@ -28,6 +37,50 @@ import { formatDateTime, type ChatMessage } from "@pkos/agent-client";
 import { dashboardUrl, desktopAppEntryUrl, desktopAppOrigin, isAllowedExternalUrl, isAllowedNavigationUrl, securityHeaders } from "../main/securityPolicy.js";
 
 const encoder = new TextEncoder();
+for (const value of [...BODY_OPTIONS, ...CAPTURE_SOURCE_OPTIONS, ...CAPTURE_TYPE_OPTIONS, ...CONTEXT_OPTIONS, ...ENERGY_OPTIONS, ...MODE_OPTIONS, ...MOOD_OPTIONS, ...RISK_OPTIONS, ...STATE_SOURCE_OPTIONS]) {
+  assert(Boolean(labels[value]?.[0] && labels[value]?.[1]), `missing bilingual enum label: ${value}`);
+}
+const abortCopy = localizedMessages[abortSend({ active: true, statusText: "" }).statusText];
+assert(abortCopy?.[0].includes("远端服务可能已经处理") && abortCopy?.[1].includes("remote service may already have processed"), "bilingual abort warning lost remote-processing caveat");
+for (const code of ["server_unreachable", "route_not_found", "session_not_found", "invalid_response", "cors_or_origin_rejected", "request_aborted", "server_error", "unknown"]) {
+  const key = `Unable to read this session's history messages. Error code: ${code}`;
+  assert(localizedMessages[key]?.[0].includes(code) && localizedMessages[key]?.[1] === key, `history error localization lost diagnostic code: ${code}`);
+}
+const renderClient = {} as AgentApiClient;
+const emptyChatProps = {
+  client: renderClient,
+  session: null,
+  sessionView: getChatSessionView(EMPTY_CHAT_VIEW_STATE, null),
+  setChatState: () => {},
+  providerStatus: null,
+  providerProfiles: null,
+  onProviderStatus: () => {},
+  onRefreshProviderStatus: async () => {},
+  onRefreshSessionMessages: async () => {},
+  onNeedsSession: async () => null,
+};
+const zhChat = renderToStaticMarkup(createElement(ChatPanel, emptyChatProps));
+const enChat = renderToStaticMarkup(createElement(LocaleProvider, { initialLocale: "en", children: createElement(ChatPanel, emptyChatProps) }));
+assert(zhChat.includes("今天，想从哪里开始？") && zhChat.includes("不是 PKOS 权威记录") && zhChat.includes('aria-label="发送消息"'), "default Chinese chat copy or authority/accessibility guard missing");
+assert(enChat.includes("Where shall we start today?") && enChat.includes("Model output is not a PKOS authority record") && enChat.includes('aria-label="Send message"'), "English chat copy or authority/accessibility guard missing");
+const zhCapture = renderToStaticMarkup(createElement(CapturePage, { client: renderClient, onStateWritten: () => {} }));
+const enCapture = renderToStaticMarkup(createElement(LocaleProvider, { initialLocale: "en", children: createElement(CapturePage, { client: renderClient, onStateWritten: () => {} }) }));
+assert(zhCapture.includes('value="note"') && zhCapture.includes("笔记") && zhCapture.includes('value="very_low"'), "Chinese capture must translate labels without changing option values");
+assert(enCapture.includes('value="note"') && enCapture.includes("Very low") && enCapture.includes("Capture inbox"), "English capture labels missing");
+const contentChatProps = {
+  ...emptyChatProps,
+  sessionView: { ...emptyChatProps.sessionView, messages: [{ id: "fixture-message", role: "user" as const, content: "completed", status: "completed" as const }] },
+};
+assert(renderToStaticMarkup(createElement(ChatPanel, contentChatProps)).includes('class="message-bubble">completed</p>'), "user message must not be translated as an enum");
+const statusProps = { client: renderClient, health: null, runtimeInfo: null, current: null, onRefresh: () => {} };
+const zhStatus = renderToStaticMarkup(createElement(StatusPage, statusProps));
+const enStatus = renderToStaticMarkup(createElement(LocaleProvider, { initialLocale: "en", children: createElement(StatusPage, statusProps) }));
+assert(zhStatus.includes("提醒的权威记录仍在 JSONL 中") && enStatus.includes("reminder authority remains in JSONL"), "bilingual reminder authority boundary missing");
+for (const locale of ["zh-CN", "en"] as const) {
+  const footer = renderToStaticMarkup(createElement(LocaleProvider, { initialLocale: locale, children: createElement(AttemptFooter, { attempt: { ...EMPTY_ATTEMPT, status: "network_unknown", requestId: "unchanged-request-id" }, onNew: () => {}, submitLabel: "fixture" }) }));
+  assert(footer.includes("unchanged-request-id") && footer.includes(locale === "en" ? "Retry keeps the same requestId and payload" : "重试会保留同一请求编号和内容"), "bilingual retry warning or request identity missing");
+}
+console.log("DESKTOP_BILINGUAL_PRESENTATION_SMOKE_OK");
 const parsed = [];
 for await (const item of parseNdjsonStream(streamFromChunks(['{"type":"generation_started","id":"1","ts":"t","payload":{},"severity":"info"}\n{"type"', ':"content_delta","id":"2","ts":"t","payload":{"delta":"a"},"severity":"debug"}']))) {
   parsed.push(item);
@@ -194,6 +247,9 @@ assert(securityHeaders().includes("default-src 'self'"), "CSP default-src missin
 assert(securityHeaders().includes("connect-src http://127.0.0.1:8790"), "CSP connect-src is not bounded");
 
 const source = readSource(join(process.cwd(), "src"));
+const localePreferenceSource = readFileSync(join(process.cwd(), "src/renderer/i18n/preference.ts"), "utf8");
+assert(localePreferenceSource.includes('"pkos.ui.locale"'), "locale preference key must be explicit");
+assert(!source.replace(localePreferenceSource, "").includes("localStorage"), "only the language preference module may use localStorage");
 for (const forbidden of [
   "nodeIntegration: true",
   "contextIsolation: false",
@@ -206,7 +262,6 @@ for (const forbidden of [
   "bypassCSP: true",
   "mode: \"no-cors\"",
   "Access-Control-Allow-Origin: *",
-  "localStorage",
   "sessionStorage",
   "indexedDB",
   "OPENAI_API_KEY",

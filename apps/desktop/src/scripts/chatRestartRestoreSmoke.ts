@@ -82,7 +82,9 @@ assert(formatDateTime("2026-07-09T16:00:00.000Z") === "2026-07-10 00:00:00", "De
 assert(isNearScrollBottom({ scrollTop: 360, clientHeight: 600, scrollHeight: 980 }), "auto-scroll near-bottom condition failed");
 
 const source = readSource(join(process.cwd(), "src"));
-for (const forbidden of ["localStorage", "sessionStorage", "indexedDB"]) {
+const localePreferenceSource = readFileSync(join(process.cwd(), "src/renderer/i18n/preference.ts"), "utf8");
+assert(!source.replace(localePreferenceSource, "").includes("localStorage"), "history and runtime data must never use localStorage");
+for (const forbidden of ["sessionStorage", "indexedDB"]) {
   assert(!source.includes(forbidden), `Desktop source contains forbidden storage: ${forbidden}`);
 }
 

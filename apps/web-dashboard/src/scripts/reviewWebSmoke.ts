@@ -59,6 +59,9 @@ assert(retryAttempt.frozenPayload?.body.rating === 4, "review retry changed froz
 assert(canSubmitReviewRating({ objectId: "fact.review.one", rating: 4, submitting: false }), "valid rating was not submittable");
 assert(!canSubmitReviewRating({ objectId: "fact.review.one", rating: null, submitting: false }), "empty rating was submittable");
 assert(!canSubmitReviewRating({ objectId: "fact.review.one", rating: 4, submitting: true }), "duplicate submit was allowed while submitting");
+for (const rating of [0, 6, 3.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+  assert(!canSubmitReviewRating({ objectId: "fact.review.one", rating, submitting: false }), `invalid rating ${rating} was submittable`);
+}
 
 const written = applySubmitResponse(retryAttempt, {
   ok: true,

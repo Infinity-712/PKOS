@@ -101,7 +101,8 @@ export function startOrReuseReviewAttempt(
 }
 
 export function canSubmitReviewRating(input: { objectId: string; rating: number | null; submitting: boolean }): boolean {
-  return Boolean(input.objectId.trim()) && input.rating !== null && !input.submitting;
+  return Boolean(input.objectId.trim()) && typeof input.rating === "number" && Number.isInteger(input.rating) &&
+    input.rating >= 1 && input.rating <= 5 && !input.submitting;
 }
 
 export function canSubmitReviewCorrection(input: { targetEventId: string; reason: string; submitting: boolean }): boolean {

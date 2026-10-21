@@ -1,6 +1,11 @@
 import {
   isActionSubmitResponse,
   isHealthResponse,
+  isObjectDeletePreflight,
+  isObjectDetailResponse,
+  isObjectListResponse,
+  isObjectRenderView,
+  isObjectTypeContractResponse,
   isRecord,
   isStateTimelineResponse,
 } from "@pkos/agent-client";
@@ -24,7 +29,18 @@ import type {
   WritebackResult,
 } from "../types.js";
 
-export { asJsonObject, isActionSubmitResponse, isHealthResponse, isRecord, isStateTimelineResponse } from "@pkos/agent-client";
+export {
+  asJsonObject,
+  isActionSubmitResponse,
+  isHealthResponse,
+  isObjectDeletePreflight,
+  isObjectDetailResponse,
+  isObjectListResponse,
+  isObjectRenderView,
+  isObjectTypeContractResponse,
+  isRecord,
+  isStateTimelineResponse,
+} from "@pkos/agent-client";
 
 export function isActionRequestListResponse(value: unknown): value is ActionRequestListResponse {
   return isRecord(value) && value.ok === true && Array.isArray(value.requests) && value.requests.every(isActionRequestView);

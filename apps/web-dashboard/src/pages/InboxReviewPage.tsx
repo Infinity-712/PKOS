@@ -1,3 +1,6 @@
+import { translateUiMessage } from "../i18n/copy.js";
+import { useLocale } from "../i18n/Locale.js";
+import { RefreshCw, Plus } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import {
@@ -35,6 +38,8 @@ const DEFAULT_FILTERS: Filters = {
 };
 
 export function InboxReviewPage() {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [items, setItems] = useState<InboxReviewItem[]>([]);
   const [message, setMessage] = useState<string | null>(null);
@@ -62,57 +67,58 @@ export function InboxReviewPage() {
     <section className="panel">
       <div className="panel-heading">
         <div>
-          <h2>Inbox Review</h2>
-          <p className="subtle">Inbox Review 改变的是派生有效状态，不修改原始 capture log。</p>
+          <h2>{uiLabel("Inbox Review")}</h2>
+          <p className="subtle">{uiLabel("Inbox Review 改变的是派生有效状态，不修改原始 capture log。")}</p>
         </div>
         <button type="button" onClick={() => void refresh()} disabled={loading}>
-          Refresh
+          <RefreshCw size={16} aria-hidden="true" />{uiLabel("Refresh")}
         </button>
       </div>
       <div className="filter-row">
         <label>
-          status
+          {uiLabel("status")}
           <select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}>
-            <option value="">all</option>
-            <option value="unprocessed">unprocessed</option>
-            <option value="archived">archived</option>
-            <option value="converted">converted</option>
+            <option value="">{uiLabel("all")}</option>
+            <option value="unprocessed">{uiLabel("unprocessed")}</option>
+            <option value="archived">{uiLabel("archived")}</option>
+            <option value="converted">{uiLabel("converted")}</option>
           </select>
         </label>
         <label>
-          source
+          {uiLabel("source")}
           <input value={filters.source} onChange={(event) => setFilters({ ...filters, source: event.target.value })} />
         </label>
         <label>
-          tag
+          {uiLabel("tag")}
           <input value={filters.tag} onChange={(event) => setFilters({ ...filters, tag: event.target.value })} />
         </label>
         <label>
-          limit
+          {uiLabel("limit")}
           <input value={filters.limit} onChange={(event) => setFilters({ ...filters, limit: event.target.value })} />
         </label>
       </div>
-      {message ? <p className="notice">{message}</p> : null}
+      {message ? <p className="notice">{uiMessage(message)}</p> : null}
       <div className="inbox-review-list">
         {items.map((item) => (
           <InboxReviewItemRow key={item.id} item={item} onChanged={() => void refresh()} />
         ))}
-        {items.length === 0 ? <p className="muted">当前筛选下没有 Inbox Review 条目。</p> : null}
+        {items.length === 0 ? <p className="muted">{uiLabel("当前筛选下没有 Inbox Review 条目。")}</p> : null}
       </div>
     </section>
   );
 }
 
 function InboxReviewItemRow(props: { item: InboxReviewItem; onChanged: () => void }) {
+  const { label: uiLabel } = useLocale();
   const mutation = inboxReviewMutationForItem(props.item);
   return (
     <article className="review-item">
       <div className="review-item-main">
         <div className="review-meta">
-          <span className="badge">{props.item.effectiveStatus}</span>
-          <span>{props.item.captureType || "capture"}</span>
-          <span>{props.item.source || "unknown"}</span>
-          <span>{props.item.createdAt || "unknown time"}</span>
+          <span className="badge">{uiLabel(props.item.effectiveStatus)}</span>
+          <span>{uiLabel(props.item.captureType || "capture")}</span>
+          <span>{props.item.source || uiLabel("unknown")}</span>
+          <span>{props.item.createdAt || uiLabel("unknown time")}</span>
         </div>
         <p className="review-content">{props.item.content}</p>
         <div className="tag-row">
@@ -124,11 +130,11 @@ function InboxReviewItemRow(props: { item: InboxReviewItem; onChanged: () => voi
         </div>
         {props.item.latestAction ? (
           <p className="subtle">
-            latest action: {props.item.latestAction.status}, {props.item.latestAction.createdAt}, reason: {props.item.latestAction.reason}
+            {uiLabel("latest action:")} {uiLabel(props.item.latestAction.status)}, {props.item.latestAction.createdAt}{uiLabel(", reason:")} {props.item.latestAction.reason}
           </p>
         ) : null}
         {props.item.effectiveStatus === "converted" ? (
-          <p className="notice">该条目已被标记为 converted。本版本不验证或创建转换目标。</p>
+          <p className="notice">{uiLabel("该条目已被标记为 converted。本版本不验证或创建转换目标。")}</p>
         ) : null}
       </div>
       {mutation ? <InboxReviewActionForm action={mutation} itemId={props.item.id} onChanged={props.onChanged} /> : null}
@@ -137,6 +143,8 @@ function InboxReviewItemRow(props: { item: InboxReviewItem; onChanged: () => voi
 }
 
 function InboxReviewActionForm(props: { itemId: string; action: InboxReviewActionKind; onChanged: () => void }) {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
@@ -180,25 +188,26 @@ function InboxReviewActionForm(props: { itemId: string; action: InboxReviewActio
   return (
     <form className="review-action" onSubmit={(event) => void submit(event)}>
       <label>
-        reason
+        {uiLabel("reason")}
         <textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} />
       </label>
       <label className="checkbox-line">
         <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-        我确认要{props.action === "archive" ? "归档" : "恢复为待处理"}该条目。
+        {uiLabel("我确认要")}{props.action === "archive" ? uiLabel("归档") : uiLabel("恢复为待处理")}{uiLabel("该条目。")}
       </label>
       <div className="attempt-row">
-        <button type="submit">{props.action === "archive" ? "归档" : "恢复为待处理"}</button>
+        <button type="submit">{props.action === "archive" ? uiLabel("归档") : uiLabel("恢复为待处理")}</button>
         <button type="button" onClick={() => setAttempt(resetAttempt())}>
-          新建请求
+          <Plus size={16} aria-hidden="true" />{uiLabel("新建请求")}
         </button>
-        <span className={`badge ${isSuccessfulAttempt(attempt.status) ? "good" : attempt.status === "draft" ? "" : "warn"}`}>{attempt.status}</span>
+        <span className={`badge ${isSuccessfulAttempt(attempt.status) ? "good" : attempt.status === "draft" ? "" : "warn"}`}>{uiLabel(attempt.status)}</span>
       </div>
-      {attempt.requestId ? <p className="subtle">requestId: {attempt.requestId}</p> : null}
-      {frozenReason !== null && frozenReason !== reason.trim() ? <p className="notice">reason 已修改；请点“新建请求”后再提交新内容。</p> : null}
-      {attempt.status === "network_unknown" ? <p className="notice">结果未知：重试会复用同一个 requestId 和冻结 payload。</p> : null}
-      {attempt.status === "request_indeterminate" ? <p className="notice">请前往 Action Requests 进行人工核验。</p> : null}
-      {message ? <p className="notice">{message}</p> : null}
+      {attempt.requestId ? <p className="subtle">{uiLabel("requestId:")} {attempt.requestId}</p> : null}
+      {attempt.lastError ? <p className="notice" role="alert">{uiMessage(attempt.lastError)}</p> : null}
+      {frozenReason !== null && frozenReason !== reason.trim() ? <p className="notice">{uiLabel("reason 已修改；请点“新建请求”后再提交新内容。")}</p> : null}
+      {attempt.status === "network_unknown" ? <p className="notice">{uiLabel("结果未知：重试会复用同一个 requestId 和冻结 payload。")}</p> : null}
+      {attempt.status === "request_indeterminate" ? <p className="notice">{uiLabel("请前往 Action Requests 进行人工核验。")}</p> : null}
+      {message ? <p className="notice">{uiMessage(message)}</p> : null}
     </form>
   );
 }

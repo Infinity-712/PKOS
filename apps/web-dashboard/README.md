@@ -1,14 +1,44 @@
 # PKOS Web Dashboard
 
-> Status: v0.6 first Web Dashboard slice. This is a local human operations surface, not PKOS authority.
+> Status: v0.8-beta local Web Dashboard slice. This is a local human operations surface, not PKOS authority.
 
 The dashboard is a private local UI for Agent Runtime operations and recovery. It talks to the Agent Server by same-origin `/api` and `/health` requests during development through the Vite proxy.
 
 It does not implement real LLM calls, Agent tool selection, RAG, memory,
-recurring reminder scheduling, object management, trusted migration, object conversion,
-OpenClaw, WeChat, Electron, mobile, or production static hosting.
+recurring reminder scheduling, trusted migration, object conversion, arbitrary
+YAML editing, force/cascade object delete, OpenClaw, WeChat, Electron, mobile,
+or production static hosting.
 
 Common browser-safe API types, guards, fetch helpers, NDJSON parsing, and request attempt state now live in `packages/agent-client`. Web-only management surfaces such as Inbox Review, Action Requests, and Audit keep their local model code and behavior boundaries unchanged.
+
+## 中文优先界面
+
+默认使用简体中文，右上角 `中文 / EN` 切换语言。只允许保存
+`pkos.ui.locale` 这一界面偏好，不缓存聊天、对象、表单或权威数据。
+用户内容、对象 ID、API 枚举和审计原始字段不翻译；时间仍使用北京时间。
+对象新建表单、技术信息按需展开，已有校验和人类确认流程不变。
+
+## 隔离设计预览
+
+```powershell
+npm run ui-preview
+```
+
+打开 `http://127.0.0.1:5180/`，Desktop renderer 位于 `/desktop/`。
+预览仅使用浏览器内合成数据；所有请求由本地 fixture 接管，CSP 禁止网络请求。
+未模拟的请求失败关闭，不会回落到真实 Agent Server。可用 `PKOS_PREVIEW_PORT`
+设置其他端口。此预览不代替正式 Data Root 的人工验收。
+
+```powershell
+npm run locale-smoke
+node src/scripts/localeCopySmoke.mjs
+npm run ui-visual-smoke
+```
+
+视觉测试需要可用的 Playwright 和 Microsoft Edge。若 Playwright 不在当前依赖中，
+设置 `PKOS_PLAYWRIGHT_MODULE` 为已安装的 `playwright/index.mjs` 路径。
+`PKOS_SCREENSHOT_DIR` 可指定截图目录；默认写入系统临时目录。
+测试覆盖两种语言、1440/900/390px 窗口、会话隔离、页面恢复、输入快捷键和无业务数据缓存。
 
 ## Run Locally
 
@@ -50,6 +80,7 @@ http://127.0.0.1:5173
 - Overview: health, connected status, service build fingerprint, API contract, database compatibility, enabled capability summary, disabled capability summary.
 - Capture: fixed Action API forms for `inbox-append` and `state-append`.
 - State: Current State card, explicit new state snapshot form, and append-only state timeline.
+- Objects: human object list/get/render/create/update/delete-preflight/delete through fixed Agent Server APIs.
 - Review: local human SRS review loop with hidden answer, rating, next-due result, history, and correction undo.
 - Inbox Review: local human review for `archive` and `restore` through fixed API endpoints.
 - Tasks: local human management for formal task create/list/detail/status transitions through fixed API endpoints.
@@ -116,11 +147,41 @@ The Review page manages human SRS ratings through fixed endpoints:
 - `POST /api/pkos/review/corrections`
 
 The queue does not include object body text. The review card starts with the
-answer hidden behind `Show answer`; ratings use bilingual 1..5 labels. Clicking
+answer hidden behind `Show answer`; clicking it calls
+`GET /api/pkos/objects/:objectId/render` and displays the centralized object
+render body plus sections. Ratings use bilingual 1..5 labels. Clicking
 Submit Rating or Undo last rating is the human confirmation and sends
 `confirmed: true`. Retry reuses the frozen `requestId` and payload. The page
 does not use `localStorage` as authority and does not add pressure mechanics or
 automatic mastery decisions.
+
+## Objects Contract
+
+The Objects page is the Web surface for v0.8-beta Object Authority. It uses:
+
+- `GET /api/pkos/object-types`
+- `GET /api/pkos/objects`
+- `GET /api/pkos/objects/:objectId`
+- `GET /api/pkos/objects/:objectId/render`
+- `POST /api/pkos/objects/:objectId/delete-preflight`
+- `POST /api/pkos/objects`
+- `PUT /api/pkos/objects/:objectId`
+- `POST /api/pkos/objects/:objectId/delete`
+
+List rows show metadata only, not full object body text. Detail loads immutable
+metadata, revision, semantic content hash, SRS eligibility, render body, and
+read-only Additional Fields. Create and update forms submit only typed fields
+plus `confirmed: true`, `requestId`, and `baseRevision` where required; the
+browser never submits `srs`, arbitrary paths, or YAML.
+
+Delete always starts with preflight. The final delete button is disabled until
+preflight allows deletion, the human types the exact object id, and a non-empty
+reason is present. The page does not implement force delete, cascade delete, or
+object id reuse.
+
+Full object text is visible only in the localhost UI for the human operator. It
+is not stored in `localStorage`, URL query parameters, generic SQLite audit
+payloads, or Agent event payloads.
 
 ## Tasks Contract
 
@@ -210,6 +271,7 @@ npm run check
 npm run build
 npm run smoke
 npm run review-web-smoke
+npm run object-web-smoke
 ```
 
 Expected smoke marker:
@@ -217,4 +279,5 @@ Expected smoke marker:
 ```text
 WEB_DASHBOARD_SMOKE_OK
 REVIEW_WEB_SMOKE_OK
+OBJECT_WEB_SMOKE_OK
 ```

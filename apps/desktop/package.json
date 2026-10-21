@@ -19,6 +19,7 @@
   "dependencies": {
     "@pkos/agent-client": "file:../../packages/agent-client",
     "electron": "^39.0.0",
+    "lucide-react": "^1.48.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

@@ -187,7 +187,7 @@ assert(staleWarning !== null && staleWarning.includes("不一定代表现在"), 
 assert(stateStaleText(false) === null, "fresh state produced stale text");
 assert(!hasStateTimelineMutationAction("edit"), "timeline exposed edit action");
 assert(!hasStateTimelineMutationAction("delete"), "timeline exposed delete action");
-assert(sourceContains('submitLabel="记录新状态快照"'), "state capture submit label is missing");
+assert(sourceContains('submitLabel={uiLabel("记录新状态快照")}'), "localized state capture submit label is missing");
 assert(sourceContains("onWritten={() => void refresh()}"), "state capture success is not wired to timeline refresh");
 
 const taskQuery = buildTaskQuery({ status: "open", priority: "high", tag: "alpha", limit: "20", title: "DO_NOT_PUT_TITLE_IN_URL" });
@@ -322,7 +322,7 @@ assert(reminderCliFailureResult?.errorCode === "cli_invalid_json", "reminder saf
 assert(isHealthResponse({ ok: true, service: "pkos-agent-server", mode: "dry-run" }), "health guard failed");
 assert(sourceContains("serviceBuildFingerprint"), "dashboard status does not display service build fingerprint");
 assert(sourceContains("databaseCompatible"), "dashboard status does not display database compatibility");
-assert(sourceContains("Service build"), "dashboard service build label is missing");
+assert(sourceContains('t("构建指纹", "Build")'), "localized dashboard service build label is missing");
 assert(sourceContains("DB compatibility"), "dashboard DB compatibility label is missing");
 assert(
   isActionRequestListResponse({
@@ -445,7 +445,9 @@ assert(unicodeTaskItem.description === "验证 JSONL、Python stdout、Node、HT
 assert(unicodeTaskItem.latestReason === "开始中文读取链路验收", "web task detail view model changed Chinese latest reason");
 assert(!JSON.stringify(unicodeTaskListPayload).includes("锟") && !JSON.stringify(unicodeTaskListPayload).includes("�"), "web task payload contains mojibake replacement text");
 
-assert(!sourceContains("localStorage"), "dashboard source must not use localStorage");
+const localePreferenceSource = readFileSync(join(process.cwd(), "src/i18n/preference.ts"), "utf8");
+assert(localePreferenceSource.includes('"pkos.ui.locale"'), "locale preference key must be explicit");
+assert(!readFiles(join(process.cwd(), "src")).some((content) => content !== localePreferenceSource && content.includes("localStorage")), "only the language preference module may use localStorage");
 assert(!sourceContains("系统判断你现在"), "dashboard contains diagnostic system-judgment copy");
 assert(!sourceContains("你患有"), "dashboard contains diagnosis copy");
 assert(!sourceContains("风险评分"), "dashboard contains risk scoring copy");

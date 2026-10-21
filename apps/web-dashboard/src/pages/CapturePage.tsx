@@ -1,3 +1,6 @@
+import { translateUiMessage } from "../i18n/copy.js";
+import { useLocale } from "../i18n/Locale.js";
+import { Plus, Send } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
 import {
@@ -69,6 +72,7 @@ export function CapturePage() {
 }
 
 function InboxCaptureForm() {
+  const { label: uiLabel } = useLocale();
   const [draft, setDraft] = useState<InboxDraft>(DEFAULT_INBOX);
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
   const actionDraft: ActionDraft = {
@@ -88,22 +92,22 @@ function InboxCaptureForm() {
 
   return (
     <form className="panel form-panel" onSubmit={(event) => void submitAction(event, actionDraft, attempt, setAttempt)}>
-      <h2>Inbox append</h2>
+      <h2>{uiLabel("Inbox append")}</h2>
       <label>
-        captureType
+        {uiLabel("captureType")}
         <input value={draft.captureType} onChange={(event) => setDraft({ ...draft, captureType: event.target.value })} />
       </label>
       <label>
-        content
+        {uiLabel("content")}
         <textarea rows={5} value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} />
       </label>
       <label>
-        source
+        {uiLabel("source")}
         <input value={draft.source} onChange={(event) => setDraft({ ...draft, source: event.target.value })} />
       </label>
       <label>
-        tags
-        <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder="comma,separated" />
+        {uiLabel("tags")}
+        <input value={draft.tags} onChange={(event) => setDraft({ ...draft, tags: event.target.value })} placeholder={uiLabel("comma,separated")} />
       </label>
       <AttemptControls attempt={attempt} onNew={() => setAttempt(resetAttempt())} />
     </form>
@@ -111,6 +115,7 @@ function InboxCaptureForm() {
 }
 
 export function StateCaptureForm(props: { submitLabel?: string; onWritten?: () => void }) {
+  const { label: uiLabel } = useLocale();
   const [draft, setDraft] = useState<StateDraft>(DEFAULT_STATE);
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
   const actionDraft: ActionDraft = {
@@ -133,93 +138,93 @@ export function StateCaptureForm(props: { submitLabel?: string; onWritten?: () =
 
   return (
     <form className="panel form-panel" onSubmit={(event) => void submitAction(event, actionDraft, attempt, setAttempt, props.onWritten)}>
-      <h2>State append</h2>
+      <h2>{uiLabel("State append")}</h2>
       <div className="compact-grid">
         <label>
-          energy
+          {uiLabel("energy")}
           <select value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value })}>
             {ENERGY_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {uiLabel(option)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          mood
+          {uiLabel("mood")}
           <select value={draft.mood} onChange={(event) => setDraft({ ...draft, mood: event.target.value })}>
             {MOOD_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {uiLabel(option)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          body
+          {uiLabel("body")}
           <select value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })}>
             {BODY_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {uiLabel(option)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          context
+          {uiLabel("context")}
           <select value={draft.context} onChange={(event) => setDraft({ ...draft, context: event.target.value })}>
             {CONTEXT_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {uiLabel(option)}
               </option>
             ))}
           </select>
         </label>
       </div>
       <label>
-        mode
+        {uiLabel("mode")}
         <select value={draft.mode} onChange={(event) => setDraft({ ...draft, mode: event.target.value })}>
           {MODE_OPTIONS.map((option) => (
             <option key={option} value={option}>
-              {option}
+              {uiLabel(option)}
             </option>
           ))}
         </select>
       </label>
       <div className="compact-grid">
         <label>
-          shortVideo
+          {uiLabel("shortVideo")}
           <select value={draft.riskShortVideo} onChange={(event) => setDraft({ ...draft, riskShortVideo: event.target.value })}>
             {RISK_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {uiLabel(option)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          rumination
+          {uiLabel("rumination")}
           <select value={draft.riskRumination} onChange={(event) => setDraft({ ...draft, riskRumination: event.target.value })}>
             {RISK_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {uiLabel(option)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          overload
+          {uiLabel("overload")}
           <select value={draft.riskOverload} onChange={(event) => setDraft({ ...draft, riskOverload: event.target.value })}>
             {RISK_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {uiLabel(option)}
               </option>
             ))}
           </select>
         </label>
       </div>
       <label>
-        note
+        {uiLabel("note")}
         <textarea rows={4} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} />
       </label>
       <AttemptControls attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel={props.submitLabel} />
@@ -257,30 +262,34 @@ async function submitAction(
 }
 
 function AttemptControls(props: { attempt: RequestAttemptState; onNew: () => void; submitLabel?: string }) {
+  const { label: uiLabel, locale, t } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const frozen = props.attempt.frozenPayload;
   return (
     <div className="attempt-box">
       <div className="attempt-row">
         <button type="submit" disabled={props.attempt.status === "submitting"}>
-          {frozen ? "重试同一 requestId" : props.submitLabel ?? "提交"}
+          <Send size={16} aria-hidden="true" />
+          {frozen ? uiLabel("重试同一 requestId") : props.submitLabel ?? uiLabel("提交")}
         </button>
         <button type="button" onClick={props.onNew}>
-          新建请求
+          <Plus size={16} aria-hidden="true" />{uiLabel("新建请求")}
         </button>
         <span className={`badge ${isSuccessfulAttempt(props.attempt.status) ? "good" : props.attempt.status === "draft" ? "" : "warn"}`}>
-          {props.attempt.status}
+          {uiLabel(props.attempt.status)}
         </span>
       </div>
+      {props.attempt.lastError ? <p className="notice" role="alert">{uiMessage(props.attempt.lastError)}</p> : null}
       <dl className="kv-list compact">
-        <dt>requestId</dt>
-        <dd>{props.attempt.requestId ?? "draft"}</dd>
-        <dt>frozen payload</dt>
-        <dd>{frozen ? `${frozen.actionName}, ${payloadSize(frozen.body)} chars` : "none"}</dd>
-        <dt>last response</dt>
-        <dd>{props.attempt.lastResponse ? JSON.stringify(props.attempt.lastResponse) : "none"}</dd>
+        <dt>{uiLabel("requestId")}</dt>
+        <dd>{props.attempt.requestId ?? uiLabel("draft")}</dd>
+        <dt>{uiLabel("frozen payload")}</dt>
+        <dd>{frozen ? `${frozen.actionName}, ${payloadSize(frozen.body)} ${t("字符", "chars")}` : uiLabel("none")}</dd>
+        <dt>{uiLabel("last response")}</dt>
+        <dd>{props.attempt.lastResponse ? JSON.stringify(props.attempt.lastResponse) : uiLabel("none")}</dd>
       </dl>
-      {props.attempt.status === "network_unknown" ? <p className="notice">结果未知：请使用同一个 requestId 重试，或到 Action Requests 核验。</p> : null}
-      {props.attempt.status === "request_indeterminate" ? <p className="notice">该请求需要人工核验，请转到 Action Requests。</p> : null}
+      {props.attempt.status === "network_unknown" ? <p className="notice">{uiLabel("结果未知：请使用同一个 requestId 重试，或到 Action Requests 核验。")}</p> : null}
+      {props.attempt.status === "request_indeterminate" ? <p className="notice">{uiLabel("该请求需要人工核验，请转到 Action Requests。")}</p> : null}
     </div>
   );
 }

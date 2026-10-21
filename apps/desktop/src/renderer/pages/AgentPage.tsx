@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useLocale } from "../i18n/Locale.js";
 import { AgentApiClientError, type AgentApiClient, type ChatSession, type ProviderProfilesResponse, type ProviderStatusResponse } from "@pkos/agent-client";
 import { ChatPanel } from "../features/chat/ChatPanel.js";
 import { ChatSessionList } from "../features/chat/ChatSessionList.js";
@@ -22,6 +23,7 @@ export function AgentPage(props: {
   selectedId: string | null;
   onSelectedIdChange: (sessionId: string | null) => void;
 }) {
+  const { message: translateMessage } = useLocale();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [providerStatus, setProviderStatus] = useState<ProviderStatusResponse | null>(null);
   const [providerProfiles, setProviderProfiles] = useState<ProviderProfilesResponse | null>(null);
@@ -127,7 +129,7 @@ export function AgentPage(props: {
         onRefreshProviderStatus={refreshProviderStatus}
         onRefreshSessionMessages={refreshSessionMessages}
       />
-      {message ? <p className="notice">{message}</p> : null}
+      {message ? <p className="notice">{translateMessage(message)}</p> : null}
     </section>
   );
 }

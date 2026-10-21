@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { useLocale } from "../../i18n/Locale.js";
 import {
   BODY_OPTIONS,
   CONTEXT_OPTIONS,
@@ -47,6 +48,7 @@ const DEFAULT_DRAFT: Draft = {
 };
 
 export function QuickStateCapture(props: { client: AgentApiClient; onWritten: () => void }) {
+  const { t } = useLocale();
   const [draft, setDraft] = useState<Draft>(DEFAULT_DRAFT);
   const [attempt, setAttempt] = useState<RequestAttemptState>(EMPTY_ATTEMPT);
 
@@ -89,7 +91,7 @@ export function QuickStateCapture(props: { client: AgentApiClient; onWritten: ()
 
   return (
     <form className="panel form-panel" onSubmit={(event) => void submit(event)}>
-      <h2>Quick State Capture</h2>
+      <h2>{t("此刻的你", "How you are now")}</h2>
       <div className="compact-grid">
         <SelectField label="energy" value={draft.energy} options={ENERGY_OPTIONS} onChange={(energy) => setDraft({ ...draft, energy })} />
         <SelectField label="mood" value={draft.mood} options={MOOD_OPTIONS} onChange={(mood) => setDraft({ ...draft, mood })} />
@@ -102,22 +104,23 @@ export function QuickStateCapture(props: { client: AgentApiClient; onWritten: ()
         <SelectField label="overload" value={draft.riskOverload} options={RISK_OPTIONS} onChange={(riskOverload) => setDraft({ ...draft, riskOverload })} />
       </div>
       <label>
-        note
+        {t("补充几句", "Note")}
         <textarea rows={4} value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} />
       </label>
-      <AttemptFooter attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel="Record state snapshot" />
+      <AttemptFooter attempt={attempt} onNew={() => setAttempt(resetAttempt())} submitLabel={t("记下此刻", "Record state snapshot")} />
     </form>
   );
 }
 
 function SelectField(props: { label: string; value: string; options: readonly string[]; onChange: (value: string) => void }) {
+  const { label } = useLocale();
   return (
     <label>
-      {props.label}
+      {label(props.label)}
       <select value={props.value} onChange={(event) => props.onChange(event.target.value)}>
         {props.options.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {label(option)}
           </option>
         ))}
       </select>

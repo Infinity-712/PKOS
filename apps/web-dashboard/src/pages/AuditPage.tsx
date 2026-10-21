@@ -1,3 +1,7 @@
+import { translateUiMessage } from "../i18n/copy.js";
+import { useLocale } from "../i18n/Locale.js";
+import { formatDateTime } from "@pkos/agent-client";
+import { RefreshCw, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { ApiClientError, getJson } from "../lib/apiClient.js";
@@ -5,6 +9,8 @@ import { isAuditEventsResponse } from "../lib/guards.js";
 import type { AuditEventView } from "../types.js";
 
 export function AuditPage() {
+  const { label: uiLabel, locale } = useLocale();
+  const uiMessage = (value: string) => translateUiMessage(value, locale);
   const [items, setItems] = useState<AuditEventView[]>([]);
   const [type, setType] = useState("");
   const [severity, setSeverity] = useState("");
@@ -41,54 +47,54 @@ export function AuditPage() {
   return (
     <section className="panel">
       <div className="panel-heading">
-        <h2>Audit Events</h2>
+        <h2>{uiLabel("Audit Events")}</h2>
         <button type="button" onClick={() => void load()}>
-          Refresh
+          <RefreshCw size={16} aria-hidden="true" />{uiLabel("Refresh")}
         </button>
       </div>
       <div className="filter-row">
         <label>
-          type
+          {uiLabel("type")}
           <input value={type} onChange={(event) => setType(event.target.value)} />
         </label>
         <label>
-          severity
+          {uiLabel("severity")}
           <input value={severity} onChange={(event) => setSeverity(event.target.value)} />
         </label>
         <label>
-          limit
+          {uiLabel("limit")}
           <input value={limit} onChange={(event) => setLimit(event.target.value)} />
         </label>
       </div>
-      {message ? <p className="notice">{message}</p> : null}
+      {message ? <p className="notice">{uiMessage(message)}</p> : null}
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>ts</th>
-              <th>type</th>
-              <th>severity</th>
-              <th>sessionId</th>
-              <th>generationId</th>
-              <th>payloadSummary</th>
+              <th>{uiLabel("ts")}</th>
+              <th>{uiLabel("type")}</th>
+              <th>{uiLabel("severity")}</th>
+              <th>{uiLabel("sessionId")}</th>
+              <th>{uiLabel("generationId")}</th>
+              <th>{uiLabel("payloadSummary")}</th>
             </tr>
           </thead>
           <tbody>
             {items.map((item) => (
               <tr key={item.id}>
-                <td>{item.ts}</td>
-                <td>{item.type}</td>
-                <td>{item.severity}</td>
-                <td>{item.sessionId ?? "none"}</td>
-                <td>{item.generationId ?? "none"}</td>
-                <td>{summaryText(item)}</td>
+                <td>{formatDateTime(item.ts)}</td>
+                <td>{uiLabel(item.type)}</td>
+                <td>{uiLabel(item.severity)}</td>
+                <td>{item.sessionId ?? uiLabel("none")}</td>
+                <td>{item.generationId ?? uiLabel("none")}</td>
+                <td>{Object.keys(item.payloadSummary).length === 0 ? uiLabel("无可公开的摘要字段") : summaryText(item)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <button type="button" disabled={!nextBefore} onClick={() => nextBefore && void load(nextBefore)}>
-        Load earlier
+        <ChevronDown size={16} aria-hidden="true" />{uiLabel("Load earlier")}
       </button>
     </section>
   );

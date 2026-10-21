@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { Activity, ArrowUpRight, Layers3, MessageCircle, PenLine } from "lucide-react";
+import { LanguageSwitch, LocaleProvider, useLocale } from "./i18n/Locale.js";
 import { AgentApiClient, AgentApiClientError, type HealthResponse, type RuntimeInfoResponse, type StateTimelineItem } from "@pkos/agent-client";
 import { agentServerBaseUrl } from "./config.js";
 import { backendStatusFromHealth, EMPTY_CHAT_VIEW_STATE, getChatSessionView, hydrateSessionMessages, type ChatViewState } from "./features/chat/chatModel.js";
@@ -8,13 +10,17 @@ import { StatusPage } from "./pages/StatusPage.js";
 
 type TabId = "agent" | "capture" | "status";
 
-const TABS: Array<{ id: TabId; label: string }> = [
-  { id: "agent", label: "Agent" },
-  { id: "capture", label: "Quick Capture" },
-  { id: "status", label: "Status" },
-];
-
 export function App() {
+  return <LocaleProvider><Desktop /></LocaleProvider>;
+}
+
+function Desktop() {
+  const { t, locale } = useLocale();
+  const TABS = [
+    { id: "agent" as const, label: t("聊一聊", "Chat"), icon: MessageCircle },
+    { id: "capture" as const, label: t("记下来", "Capture"), icon: PenLine },
+    { id: "status" as const, label: t("此刻", "Status"), icon: Activity },
+  ];
   const client = useMemo(() => new AgentApiClient({ baseUrl: agentServerBaseUrl }), []);
   const [tab, setTab] = useState<TabId>("agent");
   const [health, setHealth] = useState<HealthResponse | null>(null);
@@ -24,6 +30,7 @@ export function App() {
   const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const backend = backendStatusFromHealth(health);
+  useEffect(() => { document.title = t("PKOS · 日常", "PKOS · Daily"); }, [locale]);
 
   async function refreshStatus(): Promise<void> {
     try {
@@ -71,30 +78,22 @@ export function App() {
   }, []);
 
   return (
-    <main className="app-shell">
+    <div className="app-shell">
       <header className="topbar">
-        <div>
-          <h1>PKOS Desktop</h1>
-          <p>Daily interaction surface. Web Dashboard remains the authority management surface.</p>
-        </div>
+        <div className="brand"><span className="brand-mark"><Layers3 size={23} strokeWidth={1.6} /></span><div><strong>PKOS</strong><span>{t("留一点空间，给自己。", "A little space for yourself.")}</span></div></div>
+        <nav className="tabs" aria-label={t("日常导航", "Desktop tabs")}>
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button key={id} data-nav={id} aria-current={tab === id ? "page" : undefined} className={tab === id ? "active" : ""} type="button" onClick={() => setTab(id)}><Icon size={17} strokeWidth={1.7} />{label}</button>
+          ))}
+        </nav>
         <div className="topbar-actions">
-          <span className={backend.connected ? "badge good" : "badge bad"}>{backend.label}</span>
-          <RuntimeIdentityBadge health={health} runtimeInfo={runtimeInfo} />
-          <button type="button" onClick={() => void openDashboard()}>
-            Open Web Dashboard
-          </button>
+          <LanguageSwitch />
+          <button className="dashboard-link" type="button" title={t("打开 Web 工作台", "Open Web Dashboard")} onClick={() => void openDashboard()}>{t("工作台", "Workspace")}<ArrowUpRight size={16} /></button>
         </div>
       </header>
-
-      <nav className="tabs" aria-label="Desktop tabs">
-        {TABS.map((item) => (
-          <button key={item.id} className={tab === item.id ? "active" : ""} type="button" onClick={() => setTab(item.id)}>
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      {message ? <p className="notice">{message}</p> : null}
+      <div className="runtime-strip"><span className={backend.connected ? "connection-label good" : "connection-label bad"}><span className="status-dot" />{backend.connected ? t("本地服务已连接", "Local service connected") : t("本地服务未连接", "Local service disconnected")}</span><RuntimeIdentityBadge health={health} runtimeInfo={runtimeInfo} /></div>
+      <main className={`daily-content daily-${tab}`}>
+      {message ? <p className="notice">{locale === "en" ? message : desktopMessage(message)}</p> : null}
       {tab === "agent" ? (
         <AgentPage
           client={client}
@@ -107,13 +106,15 @@ export function App() {
       ) : null}
       {tab === "capture" ? <CapturePage client={client} onStateWritten={() => void refreshStatus()} /> : null}
       {tab === "status" ? <StatusPage client={client} health={health} runtimeInfo={runtimeInfo} current={currentState} onRefresh={() => void refreshStatus()} /> : null}
-    </main>
+      </main>
+    </div>
   );
 }
 
 function RuntimeIdentityBadge(props: { health: HealthResponse | null; runtimeInfo: RuntimeInfoResponse | null }) {
+  const { t } = useLocale();
   if (!props.runtimeInfo) {
-    return <span className="badge warn">Runtime identity unavailable</span>;
+    return <span className="badge warn">{t("运行实例身份不可用", "Runtime identity unavailable")}</span>;
   }
   const mismatch =
     typeof props.health?.runtimeFingerprint === "string" &&
@@ -125,11 +126,22 @@ function RuntimeIdentityBadge(props: { health: HealthResponse | null; runtimeInf
   return (
     <span
       className={mismatch || staleService ? "badge bad runtime-mismatch" : "badge good"}
-      title={mismatch ? "Connected runtime fingerprint does not match health response." : staleService ? "Connected Agent Server build or schema is stale." : "Connected runtime identity"}
+      title={mismatch ? t("运行实例指纹与健康检查不一致。", "Connected runtime fingerprint does not match health response.") : staleService ? t("Agent Server 构建或数据结构已过时。", "Connected Agent Server build or schema is stale.") : t("已连接的运行实例", "Connected runtime identity")}
     >
-      Runtime: {props.runtimeInfo.profileName} / {props.runtimeInfo.dataRoot.label} / {props.runtimeInfo.runtimeFingerprint.slice(0, 8)}
+      {t("运行实例：", "Runtime:")} {props.runtimeInfo.profileName} / {props.runtimeInfo.dataRoot.label} / {props.runtimeInfo.runtimeFingerprint.slice(0, 8)}
     </span>
   );
+}
+
+function desktopMessage(message: string): string {
+  const known: Record<string, string> = {
+    "Connected to PKOS Agent Server, but current state is unavailable.": "已连接本地服务，但当前状态暂不可用。",
+    "Unable to connect to PKOS Agent Server. Please confirm the local service is running.": "无法连接 PKOS Agent Server，请确认本地服务已启动。",
+    "Desktop request did not pass the local service security boundary.": "桌面请求未通过本地服务安全检查。",
+    "Agent Server returned an unrecognized health status.": "本地服务返回了无法识别的健康状态。",
+    "Unable to confirm Agent Server status.": "暂时无法确认本地服务状态。",
+  };
+  return known[message] ?? message;
 }
 
 function desktopProbeMode(): "connectivity" | "chat-history" | null {

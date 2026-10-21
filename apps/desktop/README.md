@@ -2,7 +2,22 @@
 
 > Status: v0.6 Electron Desktop Interaction MVP.
 
-PKOS Desktop is a local daily interaction surface for the PKOS Agent Server. It is not the authority management UI. Web Dashboard remains the management surface for Inbox Review, Action Requests, Audit, and fuller State Timeline work.
+PKOS Desktop is a local daily interaction surface for the PKOS Agent Server. It is not the authority management UI. Web Dashboard remains the management surface for Objects, Review/SRS, Inbox Review, Action Requests, Audit, and fuller State Timeline work.
+
+## 界面语言与设计预览
+
+界面默认中文，可用右上角 `中文 / EN` 切换。仅语言偏好 `pkos.ui.locale`
+保存在本地；对话、对象和运行状态仍从 Agent Server 获取，不缓存到浏览器存储。
+切换语言不会翻译用户内容，也不会重置当前会话或输入。
+
+无需启动 Electron 或 Agent Server，即可用合成数据查看 Desktop renderer：
+
+```powershell
+npm --prefix ../web-dashboard run ui-preview
+```
+
+打开 `http://127.0.0.1:5180/desktop/`。这是隔离的设计预览，聊天回复也是合成内容，
+不会调用真实模型或写入正式数据。正式应用的安全策略、服务地址与启动方式不变。
 
 ## Run
 
@@ -56,6 +71,7 @@ blocking chat.
 - Status: backend connectivity plus Current State summary from `GET /api/pkos/state-timeline?limit=1`.
 - Due Reminders: read-only runtime notification panel from `GET /api/runtime/reminder-notifications`; it does not write Reminder authority or create native OS notifications.
 - Review status may be surfaced only as bounded counts or a link to Web Dashboard; Desktop does not implement Review authority mutation in this MVP.
+- Object management is delegated to Web Dashboard; Desktop does not implement object create/update/delete forms in this MVP.
 - Runtime identity: profile name, data label, short runtime fingerprint, service build, API contract, and schema compatibility from `GET /api/runtime-info`.
 - Open Web Dashboard: fixed allowlisted URL `http://127.0.0.1:5173`.
 
@@ -185,7 +201,7 @@ DESKTOP_WINDOW_PROBE_OK
 
 ## Non-goals
 
-This MVP does not include installer packaging, Agent tool selection, Review UI, Reminder authority mutation, recurring Reminder Scheduler, Agent Memory, RAG, MCP, tray, native OS notifications, auto-start, auto-update, mobile, OpenClaw, WeChat, Inbox Review UI, Action Resolution UI, Audit UI, Objects, Trusted management, API key settings, provider URL settings, arbitrary model ID input, or request parameter editors.
+This MVP does not include installer packaging, Agent tool selection, Review UI, Reminder authority mutation, recurring Reminder Scheduler, Agent Memory, RAG, MCP, tray, native OS notifications, auto-start, auto-update, mobile, OpenClaw, WeChat, Inbox Review UI, Action Resolution UI, Audit UI, Desktop Object Editor, Trusted management, API key settings, provider URL settings, arbitrary model ID input, or request parameter editors.
 
 ## Commands
 

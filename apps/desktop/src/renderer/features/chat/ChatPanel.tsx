@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type KeyboardEvent, type SetStateAction } from "react";
+import { ArrowUp, Brain, Cpu, RefreshCw, Square } from "lucide-react";
+import { useLocale } from "../../i18n/Locale.js";
 import { formatDateTime, type AgentApiClient, type ChatSession, type ProviderProfileSummary, type ProviderProfilesResponse, type ProviderStatusResponse, type ReasoningPreset } from "@pkos/agent-client";
 import {
   abortSend,
@@ -26,6 +28,7 @@ export function ChatPanel(props: {
   onRefreshSessionMessages: (sessionId: string) => Promise<void>;
   onNeedsSession: () => Promise<string | null>;
 }) {
+  const { t, label, message: translateMessage } = useLocale();
   const [draft, setDraft] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -184,16 +187,16 @@ export function ChatPanel(props: {
     <section className="panel chat-panel">
       <div className="section-heading">
         <div>
-          <h2>Agent Chat</h2>
+          <h2>{t("聊一会儿", "Let's talk")}</h2>
           <ProviderStatusBlock status={provider} />
         </div>
         <div className="button-row">
-          <button type="button" onClick={() => void props.onRefreshProviderStatus()} disabled={sendState.active}>
-            Refresh
+          <button type="button" onClick={() => void props.onRefreshProviderStatus()} disabled={sendState.active} aria-label={t("刷新模型状态", "Refresh provider status")} title={t("刷新模型状态", "Refresh provider status")}>
+            <RefreshCw size={16} aria-hidden="true" />
           </button>
           {sendState.active ? (
-            <button type="button" onClick={() => void abort()}>
-              Stop receiving
+            <button type="button" onClick={() => void abort()} aria-label={t("停止接收", "Stop receiving")} title={t("停止接收", "Stop receiving")}>
+              <Square size={16} aria-hidden="true" /> {t("停止", "Stop")}
             </button>
           ) : null}
         </div>
@@ -203,7 +206,7 @@ export function ChatPanel(props: {
 
       <div className="provider-controls">
         <label>
-          <span>Model</span>
+          <span><Cpu size={14} aria-hidden="true" /> {t("模型", "Model")}</span>
           <select value={activeModelValue} onChange={(event) => void changeModel(event.target.value)} disabled={sendState.active || modelOptions.length === 0}>
             {modelOptions.map((option) => (
               <option key={option.value} value={option.value} disabled={!option.profile.enabled}>
@@ -214,18 +217,18 @@ export function ChatPanel(props: {
         </label>
         {reasoningFixed ? (
           <label>
-            <span>Reasoning</span>
+            <span><Brain size={14} aria-hidden="true" /> {t("思考深度", "Reasoning")}</span>
             <select value={provider?.selection.reasoningPreset ?? "off"} disabled>
-              <option value={provider?.selection.reasoningPreset ?? "off"}>{reasoningLabel(provider?.selection.reasoningPreset ?? "off")} (fixed)</option>
+              <option value={provider?.selection.reasoningPreset ?? "off"}>{label(provider?.selection.reasoningPreset ?? "off")} {t("（固定）", "(fixed)")}</option>
             </select>
           </label>
         ) : (
           <label>
-            <span>Reasoning</span>
+            <span><Brain size={14} aria-hidden="true" /> {t("思考深度", "Reasoning")}</span>
             <select value={provider?.selection.reasoningPreset ?? "off"} onChange={(event) => void changeReasoning(event.target.value as ReasoningPreset)} disabled={sendState.active}>
               {reasoningPresets.map((preset) => (
                 <option key={preset} value={preset}>
-                  {reasoningLabel(preset)}
+                  {label(preset)}
                 </option>
               ))}
             </select>
@@ -233,15 +236,15 @@ export function ChatPanel(props: {
         )}
       </div>
 
-      <p className="notice">Model output is not a PKOS authority record and may be wrong; verify with evidence and human judgment.</p>
-      <div className="message-stream" aria-live="polite" ref={messageStreamRef} onScroll={onMessageScroll}>
-        {props.sessionView.historyStatus === "loading" ? <p className="muted">Loading session history...</p> : null}
+      <p className="notice">{t("模型回复不是 PKOS 权威记录，可能出错；请以证据核验，由你裁决。", "Model output is not a PKOS authority record and may be wrong; verify with evidence and human judgment.")}</p>
+      <div className="message-stream" aria-label={t("对话消息", "Conversation messages")} aria-live="polite" ref={messageStreamRef} onScroll={onMessageScroll}>
+        {props.sessionView.historyStatus === "loading" ? <p className="muted">{t("正在找回对话…", "Loading session history...")}</p> : null}
         {props.sessionView.historyStatus === "error" ? (
           <div className="notice">
-            <span>{props.sessionView.historyError ?? "Unable to read this session's history messages."}</span>
+            <span>{translateMessage(props.sessionView.historyError ?? "Unable to read this session's history messages.")}</span>
             {props.session ? (
               <button type="button" onClick={() => void props.onRefreshSessionMessages(props.session?.id ?? "")} disabled={!props.session}>
-                Retry
+                {t("重试", "Retry")}
               </button>
             ) : null}
           </div>
@@ -249,77 +252,85 @@ export function ChatPanel(props: {
         {props.sessionView.messages.map((item) => (
           <article className={`message-row ${item.role}`} key={item.id}>
             <div className="message-meta">
-              <span className="badge">{item.role}</span>
-              <span>{item.status}</span>
+              <span className="badge">{label(item.role)}</span>
+              <span>{label(item.status)}</span>
               {item.createdAt ? <span>{formatDateTime(item.createdAt)}</span> : null}
             </div>
-            <p className="message-bubble">{item.content || (item.status === "streaming" ? "Receiving..." : "")}</p>
+            <p className="message-bubble">{item.content || (item.status === "streaming" ? t("正在回复…", "Receiving...") : "")}</p>
           </article>
         ))}
         {props.sessionView.messages.length === 0 && props.sessionView.historyStatus !== "loading" && props.sessionView.historyStatus !== "error" ? (
-          <p className="muted">This session has no messages yet.</p>
+          <p className="muted chat-empty">{t("今天，想从哪里开始？", "Where shall we start today?")}</p>
         ) : null}
       </div>
       <form className="composer" onSubmit={(event) => void submitForm(event)}>
-        <textarea rows={4} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown} placeholder="Send a message" />
-        <button type="submit" disabled={sendDisabled}>
-          Send
+        <textarea rows={4} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onComposerKeyDown} aria-label={t("消息", "Message")} placeholder={t("此刻，想说些什么？", "What's on your mind?")} />
+        <button className="primary-button" type="submit" disabled={sendDisabled} aria-label={t("发送消息", "Send message")} title={t("发送消息", "Send message")}>
+          <ArrowUp size={18} aria-hidden="true" /> {t("发送", "Send")}
         </button>
       </form>
-      {sendState.statusText ? <p className="subtle">{sendState.statusText}</p> : null}
-      {providerUnavailable ? <p className="notice">Provider is not ready for sending. Check profile configuration and required key environment variables.</p> : null}
-      {message ? <p className="notice">{message}</p> : null}
+      {sendState.statusText ? <p className="subtle">{translateMessage(sendState.statusText)}</p> : null}
+      {providerUnavailable ? <p className="notice">{t("模型服务尚未就绪，请检查配置与所需的密钥环境变量。", "Provider is not ready for sending. Check profile configuration and required key environment variables.")}</p> : null}
+      {message ? <p className="notice">{translateMessage(message)}</p> : null}
     </section>
   );
 }
 
 function SessionHeader(props: { session: ChatSession | null; provider: ProviderStatusResponse | null }) {
+  const { t, label } = useLocale();
   const session = props.session;
   const provider = props.provider;
   return (
-    <dl className="session-header">
-      <div>
-        <dt>Session</dt>
-        <dd>{session?.title || session?.id || "No session selected"}</dd>
-      </div>
-      <div>
-        <dt>Created</dt>
-        <dd>{formatDateTime(session?.created_at)}</dd>
-      </div>
-      <div>
-        <dt>Updated</dt>
-        <dd>{formatDateTime(session?.updated_at)}</dd>
-      </div>
-      <div>
-        <dt>Model</dt>
-        <dd>{provider ? `${provider.selection.providerDisplayName} / ${provider.selection.modelDisplayName}` : "Loading"}</dd>
-      </div>
-      <div>
-        <dt>Reasoning</dt>
-        <dd>{provider ? reasoningLabel(provider.selection.reasoningPreset) : "Loading"}</dd>
-      </div>
-    </dl>
+    <details className="session-details">
+      <summary>
+        <span>{t("会话信息", "Session details")}</span>
+        <span>{session?.title || session?.id || t("尚未选择对话", "No session selected")}</span>
+      </summary>
+      <dl className="session-header">
+        <div>
+          <dt>{t("对话", "Session")}</dt>
+          <dd>{session?.title || session?.id || t("尚未选择对话", "No session selected")}</dd>
+        </div>
+        <div>
+          <dt>{t("开始于", "Created")}</dt>
+          <dd>{formatDateTime(session?.created_at)}</dd>
+        </div>
+        <div>
+          <dt>{t("最近更新", "Updated")}</dt>
+          <dd>{formatDateTime(session?.updated_at)}</dd>
+        </div>
+        <div>
+          <dt>{t("模型", "Model")}</dt>
+          <dd>{provider ? `${provider.selection.providerDisplayName} / ${provider.selection.modelDisplayName}` : t("加载中", "Loading")}</dd>
+        </div>
+        <div>
+          <dt>{t("思考深度", "Reasoning")}</dt>
+          <dd>{provider ? label(provider.selection.reasoningPreset) : t("加载中", "Loading")}</dd>
+        </div>
+      </dl>
+    </details>
   );
 }
 
 function ProviderStatusBlock(props: { status: ProviderStatusResponse | null }) {
+  const { t, label: translateLabel, message } = useLocale();
   const status = props.status;
   if (!status) {
-    return <p className="subtle">Provider status is loading.</p>;
+    return <p className="subtle">{t("正在确认模型状态…", "Provider status is loading.")}</p>;
   }
   const label = connectionLabel(status.connection.state);
   return (
     <div className="provider-status">
       <span className={`badge ${status.connection.state === "connected" || status.connection.state === "dry_run" ? "good" : status.connection.state === "configured_unverified" ? "warn" : "bad"}`}>
-        {label}
+        {translateLabel(label)}
       </span>
       <span>{status.selection.providerDisplayName}</span>
       <span>{status.selection.modelDisplayName}</span>
-      <span>{reasoningLabel(status.selection.reasoningPreset)}</span>
-      {status.selection.endpointOrigin ? <span>{status.selection.endpointOrigin}</span> : <span>local dry-run</span>}
-      {status.connection.lastSuccessAt ? <span>last success {formatDateTime(status.connection.lastSuccessAt)}</span> : null}
-      {status.connection.lastErrorCode ? <span>{status.connection.lastErrorCode}</span> : null}
-      {status.selection.warning ? <span>{status.selection.warning}</span> : null}
+      <span>{translateLabel(status.selection.reasoningPreset)}</span>
+      {status.selection.endpointOrigin ? <span>{status.selection.endpointOrigin}</span> : <span>{t("本地演练", "local dry-run")}</span>}
+      {status.connection.lastSuccessAt ? <span>{t("上次成功", "last success")} {formatDateTime(status.connection.lastSuccessAt)}</span> : null}
+      {status.connection.lastErrorCode ? <span>{message(status.connection.lastErrorCode)}</span> : null}
+      {status.selection.warning ? <span>{message(status.selection.warning)}</span> : null}
     </div>
   );
 }
@@ -355,20 +366,4 @@ function connectionLabel(state: ProviderStatusResponse["connection"]["state"]): 
     return "Connection error";
   }
   return "Disabled";
-}
-
-function reasoningLabel(preset: ReasoningPreset): string {
-  if (preset === "off") {
-    return "Off";
-  }
-  if (preset === "low") {
-    return "Low";
-  }
-  if (preset === "medium") {
-    return "Medium";
-  }
-  if (preset === "high") {
-    return "High";
-  }
-  return "Max";
 }
