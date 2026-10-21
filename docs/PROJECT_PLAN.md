@@ -1,5 +1,7 @@
 # PKOS Project Plan
 
+> 历史路线图（2026-10-21 标注）：下文的“当前”“下一阶段”属于旧规划语境，不作为今日能力、优先级或验收声明。原文保留供追溯；当前进展见[主人状态摘要](../handbook/status.md)，有效合同与工程入口见[文档索引](README.md)。
+
 > Legacy note: v0.3 `site-private/dashboard` and v0.4 FastAPI are historical milestones. They are now quarantined as legacy read-only components. Current GUI authority writes must go through `pkos-agent-server` on port `8790`; see `docs/LEGACY_SERVICE_QUARANTINE.md`.
 
 PKOS 当前定位为私密个人知识与能动性操作系统。主线目标是维护一个 Git 可审计、可回滚、可复习、可压缩的个人知识与行动层。

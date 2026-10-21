@@ -1,5 +1,7 @@
 # PKOS Operations
 
+阅读导航：[主人启动手册](../handbook/how-to-run.md) / [工程索引](README.md)。本文保留完整工程操作说明；当前进度与未验收项见[状态摘要](../handbook/status.md)。
+
 本文件记录当前主线的本地运行流程。PKOS 当前只作为私密个人知识与能动性系统，不维护公开内容链路。
 
 ## Core Root / Data Root
@@ -42,9 +44,11 @@ pkos-vault  # private: objects, inbox, state, review logs, digests, runtime
 Recommended Agent Server startup:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 validate
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 start
+powershell -NoProfile -File scripts/local-runtime.ps1 validate
+powershell -NoProfile -File scripts/local-runtime.ps1 start
 ```
+
+Use an existing, verified profile. Do not run `configure` as part of routine startup: it overwrites the local profile. If execution policy blocks the script, stop and ask the user or administrator to review the applicable policy; do not bypass it.
 
 `local-runtime.ps1 start` reuses an existing listener only when all identity
 checks match:
@@ -54,6 +58,12 @@ checks match:
 - API contract version;
 - declared capability manifest;
 - SQLite schema compatibility.
+
+Both the current source and existing instance must also be clean for reuse.
+If either is dirty, start refuses automatic reuse and asks for an explicit
+restart; it does not terminate the listener. Dirty source may start on a free
+port, and that new instance still undergoes the full readiness identity check.
+Use isolated test profiles for smoke; do not reconfigure the working profile.
 
 If the data/runtime instance differs, the script returns
 `AGENT_SERVER_RUNTIME_MISMATCH`.
@@ -68,7 +78,7 @@ manually after inspecting it.
 Useful checks:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 show
+powershell -NoProfile -File scripts/local-runtime.ps1 show
 curl http://127.0.0.1:8790/health
 curl http://127.0.0.1:8790/api/runtime-info
 ```
@@ -166,6 +176,48 @@ CLI 人工写回仍可用于验收与恢复：
 ```bash
 python -m tools.pkos review-rate --object-id fact.demo --rating 4 --reviewed-at "2026-07-20T00:00:00Z" --actor human --request-id "review-demo-1" --json
 ```
+
+## Object Authority
+
+Object editing is a human workflow through the current Agent Runtime path:
+
+```text
+Web Dashboard -> 127.0.0.1:8790 Agent Server -> Python Core -> PKOS_DATA_ROOT
+```
+
+The old static site on `8000` and the old FastAPI service on `8787` are not
+object editors and must not be pointed at the formal data root for mutation.
+
+Useful recovery/verification commands:
+
+```bash
+python -m tools.pkos object-types --json
+python -m tools.pkos object-list --json
+python -m tools.pkos object-get --object-id fact.demo --json
+python -m tools.pkos object-render --object-id fact.demo --json
+python -m tools.pkos object-rebuild --json
+```
+
+Mutations require a clean Git data root, `confirmed`, `requestId`, and exact
+revision where applicable:
+
+```bash
+python -m tools.pkos object-create --payload-json '{"id":"fact.demo","type":"fact","status":"parsed","title":"Demo","summary":"Demo","content":"Demo","source":["manual"],"anchors":[]}' --request-id object-create-demo --confirmed --actor human --json
+python -m tools.pkos object-update --object-id fact.demo --base-revision <fileRevisionSha256> --patch-json '{"summary":"Updated"}' --request-id object-update-demo --confirmed --actor human --json
+python -m tools.pkos object-delete-preflight --object-id fact.demo --base-revision <fileRevisionSha256> --json
+python -m tools.pkos object-delete --object-id fact.demo --base-revision <fileRevisionSha256> --typed-object-id fact.demo --reason "cleanup" --request-id object-delete-demo --confirmed --actor human --json
+```
+
+Rollback uses data-root Git, not core-root Git:
+
+```bash
+git -C <PKOS_DATA_ROOT> log --oneline -n 5
+git -C <PKOS_DATA_ROOT> revert <commit_hash>
+python -m tools.pkos --data-root <PKOS_DATA_ROOT> object-rebuild --json
+python -m tools.pkos --data-root <PKOS_DATA_ROOT> review-rebuild --json
+```
+
+See `docs/OBJECT_AUTHORITY_CONTRACT.md`.
 
 ## 回滚
 

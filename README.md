@@ -1,43 +1,14 @@
 # Personal Knowledge OS (PKOS)
 
-## Local Runtime Bootstrap
+阅读入口：**[中文主人手册](handbook/README.md)** · **[工程与 Agent 文档索引](docs/README.md)**。
 
-Recommended local startup is through the runtime profile script, not ad-hoc
-`npm run dev` in multiple terminals:
+项目进展见[当前状态](handbook/status.md)；[2026-09-26 状态快照](docs/CURRENT_STATE.md)保留供追溯。只读 Agent 实验仍是待实施提案，不代表已完成行为验收。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 configure -DataRoot "E:\Creation\PKOS-Data" -ProfileName "local-main"
-powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 show
-$env:DEEPSEEK_API_KEY="<set-in-current-shell>"
-powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 start
-powershell -ExecutionPolicy Bypass -File scripts/local-runtime.ps1 stop
-```
+## 本地启动
 
-Different `PKOS_DATA_ROOT` values mean different sessions, messages, provider
-runtime selection, connection status, and custom provider profiles. API keys
-belong only to the Agent Server process environment; the runtime profile,
-SQLite database, README examples, and process ledger must not contain key
-values.
+日常入口是 `scripts/local-runtime.ps1 start`，完整步骤统一见[如何运行](handbook/how-to-run.md)，工程参数和排障见[Operations](docs/OPERATIONS.md)。已有配置先校验，不要为日常启动再次执行会覆盖配置的 `configure`，也不要绕过系统执行策略。
 
-If Agent Server is started directly, set both roots explicitly:
-
-```powershell
-$env:PKOS_CORE_ROOT="E:\Creation\Codex\PKOS"
-$env:PKOS_DATA_ROOT="E:\Creation\PKOS-Data"
-cd apps/agent-server
-npm run dev
-```
-
-Agent Server startup logs print both runtime identity and service build identity.
-If port `8790` is occupied by a different runtime fingerprint, or by the same
-runtime with a stale service build, missing capability, or incompatible schema,
-stop and inspect it manually; PKOS will not silently reuse or kill an unknown
-runtime.
-
-`scripts/local-runtime.ps1 start` reuses an existing Agent Server only when the
-runtime fingerprint, service build fingerprint, API contract version, declared
-capabilities, and SQLite schema compatibility all match. See
-`docs/SERVICE_IDENTITY_CONTRACT.md`.
+不同 `PKOS_DATA_ROOT` 对应不同聊天历史和 Provider 运行配置。密钥只交给 Agent Server 进程环境，不写进 profile、数据库、文档或进程清单。实例身份、构建或 schema 不匹配时先人工核对，不抢占端口或终止未知进程；复用条件见[Service Identity](docs/SERVICE_IDENTITY_CONTRACT.md)。
 
 PKOS 是一个私密个人知识与能动性系统。它把知识对象、复习队列、Digest、本地 dashboard 与后续 Flow Hub 连接在同一个可审计的 Git 文件权威层中。
 
@@ -132,6 +103,13 @@ python -m tools.pkos review-queue --json
 python -m tools.pkos review-rate --object-id fact.demo --rating 4 --reviewed-at "2026-07-20T00:00:00Z" --actor human --request-id "review-demo-1" --json
 python -m tools.pkos review-history --object-id fact.demo --json
 python -m tools.pkos review-correct --target-event-id review_... --reason "wrong button" --actor human --request-id "review-correct-1" --json
+python -m tools.pkos object-types --json
+python -m tools.pkos object-list --json
+python -m tools.pkos object-render --object-id fact.demo --json
+python -m tools.pkos object-create --payload-json '{"id":"fact.demo","type":"fact","status":"parsed","title":"Demo","summary":"Demo","content":"Demo","source":["manual"],"anchors":[]}' --request-id object-create-demo --confirmed --actor human --json
+python -m tools.pkos object-update --object-id fact.demo --base-revision <fileRevisionSha256> --patch-json '{"summary":"Updated"}' --request-id object-update-demo --confirmed --actor human --json
+python -m tools.pkos object-delete-preflight --object-id fact.demo --base-revision <fileRevisionSha256> --json
+python -m tools.pkos object-delete --object-id fact.demo --base-revision <fileRevisionSha256> --typed-object-id fact.demo --reason "cleanup" --request-id object-delete-demo --confirmed --actor human --json
 ```
 
 `gen-flow` 会生成 `runtime/flow/*.json`。`export-agent-context` 会生成 `runtime/agent_context.json`，供月洛洛读取。二者都是只读派生命令，不修改 `objects/`、`docs/`、schema 或 trusted 状态。
@@ -230,6 +208,26 @@ writing material. Human ratings use the fixed 1..5 mapping: Again, Hard, Good,
 Easy, Perfect. Agent/LLM code must not grade mastery.
 
 See `docs/REVIEW_SRS_CONTRACT.md`.
+
+## Object Authority v0.8-beta
+
+Objects are now editable through the current Web Dashboard on `127.0.0.1:5173`
+backed by Agent Server on `127.0.0.1:8790`. The formal authority remains
+Git-tracked YAML under `PKOS_DATA_ROOT/objects/`; Node and Web never write YAML
+directly.
+
+The object flow supports list/get/render/create/update/delete-preflight/hard
+delete for `fact`, `claim`, `skill`, and internal `creative`. Updates require
+`fileRevisionSha256` as `baseRevision`; `objectContentSha256` remains the
+Review/SRS semantic hash. Deletes append tombstones under
+`objects/deletions/YYYY-MM-DD.jsonl`, do not cascade, and do not delete review
+history.
+
+Review Show Answer now reads the same object render endpoint only after the
+human clicks Show Answer. Full object body text is not part of the initial
+review queue payload.
+
+See `docs/OBJECT_AUTHORITY_CONTRACT.md`.
 
 ## Legacy FastAPI Quarantine
 
